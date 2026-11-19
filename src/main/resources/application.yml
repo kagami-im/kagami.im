@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: kagami
+  profiles:
+    # Local development by default; in production override with SPRING_PROFILES_ACTIVE=prod
+    active: dev
+
+  flyway:
+    enabled: true
+    locations:
+      - classpath:db/migration
+    validate-on-migrate: true
+
+# Generating the RSA key pair (Java can only read a PKCS8 private key directly):
+#   private key:  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private_key_pkcs1.pem
+#   convert:      openssl pkcs8 -topk8 -inform PEM -outform PEM -in private_key_pkcs1.pem -out private_key.pem -nocrypt
+#   public key:   openssl rsa -in private_key_pkcs1.pem -pubout -out public_key.pem
+# In production, inject the keys through environment variables or a mounted volume so they are not
+# shipped inside the artifact.
+jwt:
+  issuer: kagami
+  header: Authorization
+  token-prefix: "Bearer "
+  expiration-in: 900
+  rsa:
+    private-key-location: classpath:keys/private_key.pem
+    public-key-location: classpath:keys/public_key.pem
+
+# Rate limiting. "local" keeps buckets in process memory (right for single-node); once several
+# instances share one bucket store, switch to "redis" and add a bucket4j Redis BucketProvider.
+kagami:
+  rate-limit:
+    backend: local

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="im.kagami.post.mapper.PostTagMapper">
+
+    <delete id="deleteByPostId">
+        DELETE FROM post_tags
+        WHERE post_id = #{postId}
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT INTO post_tags (post_id, tag_id)
+        VALUES
+        <foreach collection="tagIds" item="tagId" separator=",">
+            (#{postId}, #{tagId})
+        </foreach>
+    </insert>
+
+    <resultMap id="PostTagRowResultMap" type="im.kagami.post.domain.PostTagRow">
+        <id     column="post_id"  property="postId"/>
+        <result column="tag_id"   property="tagId"/>
+        <result column="tag_name" property="tagName"/>
+    </resultMap>
+
+    <select id="selectByPostIds" resultMap="PostTagRowResultMap">
+        SELECT pt.post_id,
+               t.id AS tag_id,
+               t.name AS tag_name
+        FROM post_tags pt
+        JOIN tags t ON t.id = pt.tag_id
+        WHERE pt.post_id IN
+        <foreach collection="postIds" item="postId" open="(" separator="," close=")">
+            #{postId}
+        </foreach>
+        ORDER BY pt.post_id, t.id
+    </select>
+
+</mapper>

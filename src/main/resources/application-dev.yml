@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    username: kagami
+    password: 123456
+    url: jdbc:postgresql://localhost:5432/kagami
+
+  flyway:
+    # A local database is often already populated, so baseline it at version 1 and let Flyway mark
+    # the existing schema instead of failing. An empty database still runs the script normally.
+    baseline-on-migrate: true
+    baseline-version: 1
+
+logging:
+  level:
+    im.kagami: debug

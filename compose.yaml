@@ -1,0 +1,37 @@
+# Kagami local dependency stack
+# Only the database (PostgreSQL) is kept. Redis / RabbitMQ / Elasticsearch went away with the
+# features that needed them.
+#
+# Usage:
+#   docker compose up -d postgres
+#   docker compose ps
+#   docker compose down        # stop, keeping the data volume
+#   docker compose down -v     # stop and delete the volume (wipes the database; Flyway re-runs V1)
+#
+# Override the defaults by putting a .env file in the repository root, e.g. POSTGRES_PASSWORD=xxx
+
+services:
+  postgres:
+    image: postgres:18.4
+    container_name: kagami-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kagami}
+      POSTGRES_USER: ${POSTGRES_USER:-kagami}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    # PostgreSQL 18+ requires the mount point to be /var/lib/postgresql rather than /data; the image
+    # creates a major-version subdirectory underneath (18/data), which keeps pg_upgrade simple later.
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kagami -d kagami"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

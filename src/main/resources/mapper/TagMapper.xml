@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="im.kagami.post.mapper.TagMapper">
+
+    <resultMap id="TagCountResultMap" type="im.kagami.post.domain.TagCountRow">
+        <id     column="id"         property="tagId"/>
+        <result column="name"       property="name"/>
+        <result column="post_count" property="postCount"/>
+    </resultMap>
+
+    <!-- COUNT(p.id) and not COUNT(pt.post_id): the LEFT JOINs keep tags with no published posts in
+         the result (count 0), and rows joined to a draft post must not be counted either. -->
+    <select id="selectTagCounts" resultMap="TagCountResultMap">
+        SELECT t.id,
+               t.name,
+               COUNT(p.id) AS post_count
+        FROM tags t
+        LEFT JOIN post_tags pt ON pt.tag_id = t.id
+        LEFT JOIN posts p ON p.id = pt.post_id AND p.status = 1
+        GROUP BY t.id, t.name
+        ORDER BY post_count DESC, t.name ASC
+    </select>
+
+</mapper>

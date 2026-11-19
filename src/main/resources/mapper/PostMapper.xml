@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="im.kagami.post.mapper.PostMapper">
+
+    <resultMap id="PostResultMap" type="im.kagami.post.domain.Post">
+        <id     column="id"           property="id"/>
+        <result column="author_id"    property="authorId"/>
+        <result column="title"        property="title"/>
+        <result column="slug"         property="slug"/>
+        <result column="summary"      property="summary"/>
+        <result column="cover_url"    property="coverUrl"/>
+        <result column="content"      property="content"/>
+        <result column="status"       property="status"/>
+        <result column="pinned"       property="pinned"/>
+        <result column="word_count"   property="wordCount"/>
+        <result column="reading_minutes" property="readingMinutes"/>
+        <result column="published_at" property="publishedAt"/>
+        <result column="created_at"   property="createdAt"/>
+        <result column="updated_at"   property="updatedAt"/>
+    </resultMap>
+
+    <!-- List query: content is deliberately not selected — summaries never carry the body, and
+         posts can be large. -->
+    <select id="selectPublishedPage" resultMap="PostResultMap">
+        SELECT p.id,
+               p.author_id,
+               p.title,
+               p.slug,
+               p.summary,
+               p.cover_url,
+               p.status,
+               p.pinned,
+               p.word_count,
+               p.reading_minutes,
+               p.published_at,
+               p.created_at,
+               p.updated_at
+        FROM posts p
+        <if test="tagName != null and tagName != ''">
+            JOIN post_tags pt ON pt.post_id = p.id
+            JOIN tags t ON t.id = pt.tag_id AND t.name = #{tagName}
+        </if>
+        WHERE p.status = 1
+        ORDER BY p.pinned DESC, p.published_at DESC, p.id DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,114 @@
+/* OKLCH theme system — one hue drives the whole palette.
+   Semantic tokens keep their names across modes; only their values change.
+   Hue offsets keep the pink/blue accents related to the primary purple. */
+:root {
+  color-scheme: light;
+
+  /* Single source of truth: change --hue to retheme the entire site. */
+  --hue: 286;
+  --hue-pink: calc(var(--hue) + 60);
+  --hue-blue: calc(var(--hue) - 55);
+
+  /* Brand roles */
+  --color-primary: oklch(0.55 0.16 var(--hue));
+  --color-accent-pink: oklch(0.72 0.155 var(--hue-pink));
+  --color-accent-blue: oklch(0.72 0.12 var(--hue-blue));
+  --color-avatar: oklch(0.98 0.01 var(--hue));
+
+  /* Surfaces */
+  --color-bg: oklch(0.97 0.012 var(--hue));
+  --color-surface: oklch(0.995 0.004 var(--hue));
+  --color-surface-muted: oklch(0.93 0.02 var(--hue));
+  --color-nav-surface: oklch(0.94 0.025 var(--hue));
+  --color-hero-surface: oklch(0.92 0.03 var(--hue));
+  --color-welcome-surface: oklch(0.995 0.004 var(--hue));
+  --color-intro-bg: oklch(0.95 0.025 var(--hue));
+
+  /* Text — L is perceptual, so these read as near-black / near-white. */
+  --color-text: oklch(0.3 0.1 var(--hue));
+  --color-text-muted: oklch(0.52 0.06 var(--hue));
+  --color-text-faint: oklch(0.66 0.04 var(--hue));
+  --color-on-accent: oklch(0.99 0.005 var(--hue));
+
+  /* Lines and focus */
+  --color-border: oklch(0.85 0.04 var(--hue));
+  --color-focus-ring: oklch(0.72 0.12 var(--hue));
+
+  /* Elevation */
+  --shadow-soft: 0 4px 16px oklch(0.4 0.1 var(--hue) / 0.12);
+  --shadow-card: 0 10px 30px oklch(0.4 0.1 var(--hue) / 0.15);
+  --color-cover-edge: oklch(0.4 0.1 var(--hue) / 0.2);
+  --shadow-cover:
+    0 14px 40px oklch(0.4 0.1 var(--hue) / 0.22),
+    0 6px 12px oklch(0.4 0.1 var(--hue) / 0.12);
+  --shadow-cover-hover:
+    0 22px 55px oklch(0.4 0.1 var(--hue) / 0.28),
+    0 10px 18px oklch(0.4 0.1 var(--hue) / 0.16);
+
+  /* Radius */
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Layout */
+  --layout-max-width: 1200px;
+  --layout-sidebar-width: 320px;
+  --layout-gap: var(--space-5);
+
+  /* Responsive breakpoints — media queries use these exact values */
+  --bp-mobile: 480px;
+  --bp-tablet: 768px;
+  --bp-desktop: 1024px;
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+
+/* Dark mode reuses every semantic name with dark-appropriate L/C values. */
+:root.dark {
+  color-scheme: dark;
+
+  --color-primary: oklch(0.72 0.14 var(--hue));
+  --color-accent-pink: oklch(0.82 0.13 var(--hue-pink));
+  --color-accent-blue: oklch(0.85 0.07 var(--hue-blue));
+  --color-avatar: oklch(0.3 0.02 var(--hue));
+
+  --color-bg: oklch(0.16 0.02 var(--hue));
+  --color-surface: oklch(0.22 0.025 var(--hue));
+  --color-surface-muted: oklch(0.28 0.03 var(--hue));
+  --color-nav-surface: oklch(0.27 0.035 var(--hue));
+  --color-hero-surface: oklch(0.28 0.05 var(--hue));
+  --color-welcome-surface: oklch(0.26 0.045 var(--hue-pink));
+  --color-intro-bg: oklch(0.2 0.04 var(--hue));
+
+  --color-text: oklch(0.92 0.03 var(--hue));
+  --color-text-muted: oklch(0.75 0.035 var(--hue));
+  --color-text-faint: oklch(0.62 0.03 var(--hue));
+  --color-on-accent: oklch(0.18 0.04 var(--hue));
+
+  --color-border: oklch(0.36 0.05 var(--hue));
+  --color-focus-ring: oklch(0.7 0.12 var(--hue));
+
+  --shadow-soft: 0 4px 16px oklch(0 0 0 / 0.35);
+  --shadow-card: 0 10px 30px oklch(0 0 0 / 0.45);
+  --color-cover-edge: oklch(0.85 0.08 var(--hue) / 0.25);
+  --shadow-cover:
+    0 14px 40px oklch(0 0 0 / 0.5),
+    0 6px 12px oklch(0 0 0 / 0.3);
+  --shadow-cover-hover:
+    0 22px 55px oklch(0 0 0 / 0.6),
+    0 10px 18px oklch(0 0 0 / 0.4);
+}

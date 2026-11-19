@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    # Credentials come from environment variables; nothing is hardcoded. The defaults only exist so
+    # a local smoke test can run.
+    username: ${DB_USERNAME:kagami}
+    password: ${DB_PASSWORD:123456}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:kagami}
+
+  flyway:
+    # Never baseline in production: it would silently swallow an unexpected schema. Baseline by hand
+    # before the first deployment.
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+logging:
+  level:
+    im.kagami: info

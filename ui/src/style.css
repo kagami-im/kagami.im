@@ -1,0 +1,53 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Double-clicking blank space is a global gesture for switching views. Browsers
+   resolve a double-click on a textless area to the nearest selectable text node,
+   which randomly highlights unrelated text. Make "not selectable" the site-wide
+   default so every new surface is safe, and opt real reading content back in via
+   `.selectable` (or `user-select: text`) only where copying is meaningful. */
+.selectable {
+  user-select: text;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  user-select: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
