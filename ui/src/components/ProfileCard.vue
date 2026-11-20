@@ -4,14 +4,12 @@
       <span class="profile-avatar" aria-hidden="true">K</span>
       <div class="profile-identity">
         <h2 class="profile-name">Kagami</h2>
-        <p class="profile-bio">这是介绍。</p>
+        <p class="profile-bio">......</p>
       </div>
     </div>
 
     <div class="profile-links">
-      <span class="profile-link">GitHub</span>
-      <span class="profile-link">Email</span>
-      <span class="profile-link">RSS</span>
+      <span class="profile-link"><a href="mailto:admin@kagami.im">Email</a> </span>
     </div>
   </section>
 </template>

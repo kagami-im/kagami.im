@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '../stores/theme'
 
-const navItems = ['首页', '文章', '归档', '标签', '小屋']
+const navItems = ['首页', '文章', '归档', '标签']
 
 const themeStore = useThemeStore()
 const { isDark } = storeToRefs(themeStore)
@@ -27,9 +27,8 @@ const { isDark } = storeToRefs(themeStore)
         :aria-label="isDark ? '切换为浅色' : '切换为深色'"
         @click="themeStore.toggleTheme()"
       >
-        {{ isDark ? '☾' : '☀' }}
+        {{ isDark ? '🌙' : '🔆' }}
       </button>
-      <span class="avatar" aria-label="用户头像">K</span>
     </div>
   </header>
 </template>

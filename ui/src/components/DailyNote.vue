@@ -1,7 +1,7 @@
 <template>
   <section class="daily-note">
-    <h2 class="note-title">这是小记</h2>
-    <p class="note-text">这是小记详情。</p>
+    <h2 class="note-title">......</h2>
+    <p class="note-text">......</p>
   </section>
 </template>
 
