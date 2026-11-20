@@ -11,7 +11,7 @@ const { isDark } = storeToRefs(themeStore)
 <template>
   <header class="app-header">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true">✿</span>
+      <img src="/favicon.svg" class="brand-mark" alt="" aria-hidden="true" />
       <span class="brand-name">Kagami</span>
     </div>
 
@@ -60,8 +60,9 @@ const { isDark } = storeToRefs(themeStore)
 }
 
 .brand-mark {
-  color: var(--color-accent-pink);
-  font-size: 20px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .site-nav {
