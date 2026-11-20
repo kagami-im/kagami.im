@@ -1,19 +1,36 @@
 <script setup lang="ts">
+import { nextTick, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import AppHeader from '../components/AppHeader.vue'
 import HeroBanner from '../components/HeroBanner.vue'
 import WelcomePanel from '../components/WelcomePanel.vue'
 import ArticleList from '../components/ArticleList.vue'
 import ProfileCard from '../components/ProfileCard.vue'
 import DailyNote from '../components/DailyNote.vue'
+import ArticleDetailView from './ArticleDetailView.vue'
+import { useArticlesStore } from '../stores/articles'
 
 const emit = defineEmits<{ back: [] }>()
+const articlesStore = useArticlesStore()
+const { selectedArticle } = storeToRefs(articlesStore)
+
+// The home DOM is torn down while the detail view is shown, which resets scroll.
+// Remember the offset on the way in and restore it after the home DOM is back.
+let savedScrollY = 0
+watch(selectedArticle, (article, previous) => {
+  if (article && !previous) {
+    savedScrollY = window.scrollY
+  } else if (!article && previous) {
+    nextTick(() => window.scrollTo(0, savedScrollY))
+  }
+})
 </script>
 
 <template>
-  <div class="home-page" @dblclick.self="emit('back')">
+  <AppHeader />
+  <ArticleDetailView v-if="selectedArticle" @back="articlesStore.closeArticle()" />
+  <div v-else class="home-page" @dblclick.self="emit('back')">
     <div class="home-shell" @dblclick.self="emit('back')">
-      <AppHeader />
-
       <main class="home-main" @dblclick.self="emit('back')">
         <HeroBanner @back="emit('back')" />
         <WelcomePanel />
