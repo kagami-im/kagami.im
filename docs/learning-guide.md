@@ -4,7 +4,7 @@
 >
 > 配合仓库阅读:每个阶段都标注了对应的关键文件,建议边读文档边开仓库对照。
 >
-> 范围:当前仓库包含 Spring Boot 后端、Vue 3 控制台(`kagami-ui`)与 Vue 3 公开站(`front`)。早期曾有的 Nuxt 公开站模块已整体移除;现在的 `front` 是重新搭建的独立公开站,与旧模块无关。踩坑编号为历史编号,删去旧公开站阶段后会有跳号。
+> 范围:本仓库当前包含 Spring Boot 后端与 Vue 3 公开站(`ui`)。控制台(`kagami-ui`)与旧公开站(`front`)是前身仓库的阶段产物,代码不在本仓库——Phase 3 / Phase 5 / 阶段 9 保留作为路线图与踩坑记录,其中的路径指向前身仓库。踩坑编号为历史编号,因此有跳号。
 
 ---
 
@@ -23,9 +23,9 @@
 ```
 ┌──────────────┐        ┌─────────────────────────────────────┐
 │ 作者(浏览器)  │        │      Spring Boot 后端 (:8080)        │
-│ :5173 控制台  ├──────► │  ├─ /api/register /login /me        │
-│ kagami-ui    │  JWT   │  ├─ /api/posts/**  公开读(匿名+限流)  │
-│ (Vue3+naive) │        │  ├─ /api/manage/posts/** 管理(JWT)   │
+│ :5173 前端    ├──────► │  ├─ /api/register /login /me        │
+│ 控制台+公开站 │  JWT   │  ├─ /api/posts/**  公开读(匿名+限流)  │
+│ (Vue 3)      │        │  ├─ /api/manage/posts/** 管理(JWT)   │
 └──────────────┘        │  ├─ /api/**/comments 评论(读匿名/写JWT)│
                         │  └─ ResultWrapperAdvice 统一信封       │
                         └──────────────┬──────────────────────┘
@@ -53,7 +53,7 @@
 
 推荐顺序:**地基 → 用户系统 → 内容模型 → 控制台(先能写)→ 评论与测试 → 体验收尾**。
 
-仓库早期曾先做公开站再补控制台,公开站模块后来整体移除;两种顺序都成立——**关键是每个阶段结束时都能端到端跑通**,而不是追求某个"标准顺序"。
+前身仓库早期曾先做公开站再补控制台,公开站模块后来整体移除;两种顺序都成立——**关键是每个阶段结束时都能端到端跑通**,而不是追求某个"标准顺序"。
 
 ---
 
@@ -124,6 +124,8 @@
 
 ## Phase 3:控制台(编辑器与管理)
 
+> 本阶段的控制台前端不在本仓库(见顶部"范围")——保留作为设计决策与踩坑的路线图。
+
 **目标**:登录后的文章列表 + 分栏 Markdown 编辑器,消费同一套后端 API。
 
 **设计决策**:
@@ -167,6 +169,8 @@
 
 ## Phase 5:控制台评论审核 UI
 
+> 同 Phase 3:控制台前端不在本仓库,保留作为路线图与踩坑记录。
+
 **目标**:控制台出现评论审核页(隐藏/恢复/删除),让读者评论区的管理闭环落在作者手上。
 
 **设计决策**:
@@ -186,6 +190,8 @@
 ---
 
 ## 阶段 9:公开站前端(front)
+
+> 本阶段记录的是前身仓库中的旧公开站(`front`);当前仓库的公开站重建为 `ui/`(见 `ui/README.md`),设计改为单色相 OKLCH token 体系。本节保留作为历史记录。
 
 **目标**:按设计图还原一个可直接运行的个人小屋公开站——首页、文章列表、文章详情、归档、标签、小屋(关于 & 收藏),含移动端适配与明暗主题切换。
 
@@ -240,23 +246,25 @@
 
 **数据库(PostgreSQL / Flyway)**:bigserial 与身份策略、timestamptz + 应用侧写入、唯一索引与 NULL(`V2`)、增量迁移与回填(`V3`)、索引跟随 ORDER BY(`V3`)、LATERAL/random 造数陷阱(`docs/mock_data.sql`)。
 
-**控制台(Vue / 原生控件)**:CSS token 与全局控件类(`kagami-ui/src/styles/index.css`)、Promise 化确认与 toast(`useFeedback.ts` + `FeedbackHost.vue`)、vue-tsc 的模板类型检查、R 信封在客户端的统一解包、markdown-it + shiki 预览(`kagami-ui/src/utils/markdown.ts`)。
+**控制台(Vue / 原生控件;前身仓库,代码不在本仓库)**:CSS token 与全局控件类(`kagami-ui/src/styles/index.css`)、Promise 化确认与 toast(`useFeedback.ts` + `FeedbackHost.vue`)、vue-tsc 的模板类型检查、R 信封在客户端的统一解包、markdown-it + shiki 预览(`kagami-ui/src/utils/markdown.ts`)。
 
-**公开站(Vue / 设计 token / 占位资源)**:集中式 token 层(`front/src/styles/tokens.css`)、统一图片占位(`PlaceholderImage.vue`)、类型化 mock 与派生数据(`front/src/data/mock.ts`)、嵌套路由与锚点滚动(`front/src/router/index.ts`)、markdown-it 安全渲染(`PostDetailView.vue`)。
+**公开站·前身(front;代码不在本仓库)**:集中式 token 层(`front/src/styles/tokens.css`)、统一图片占位(`PlaceholderImage.vue`)、类型化 mock 与派生数据(`front/src/data/mock.ts`)、嵌套路由与锚点滚动(`front/src/router/index.ts`)、markdown-it 安全渲染(`PostDetailView.vue`)。
+
+**公开站·当前(ui)**:单色相 OKLCH token 层,一个 `--hue` 驱动明暗两套(`ui/src/styles/tokens.css`)、常驻唱片的形态形变与停靠(`ui/src/components/VinylPlayer.vue`)、本地 markdown 数据层与可替换数据源(`ui/src/data/`)、Pinia 状态(`ui/src/stores/`)。
 
 **工程化**:统一信封的跨端契约、README 体系、语义化提交与阶段化交付、文档即路线图(本文)。
 
 ## 延伸路线(按性价比排序)
 
-1. **测试**:评论 API 已有 Testcontainers 集成测试;下一步是 PostService/TagService 单元测试(Mockito)+ 公开文章 API 的 MockMvc 集成测试;控制台补组件级测试。
-2. **CI**:GitHub Actions 跑 `mvnw verify` + `kagami-ui` 的 build/lint。
-3. **部署**:compose.yaml 补 `kagami-api` 服务;公开站已在 `front/`,下一步接入真实 API,再规划其渲染层与站点 URL 配置。
+1. **测试**:评论 API 已有 Testcontainers 集成测试;下一步是 PostService/TagService 单元测试(Mockito)+ 公开文章 API 的 MockMvc 集成测试。
+2. **CI**:GitHub Actions 跑 `mvnw verify` + `ui` 的 `npm run build`。
+3. **部署**:compose.yaml 补 `kagami-api` 服务;公开站已在 `ui/`,下一步接入真实 API,再规划其渲染层与站点 URL 配置。
 4. **缓存演进**:限流的 Redis 后端(`BucketProvider` 接口已预留)、列表接口加 Redis 缓存。
 5. **功能线**:PG 全文检索、浏览量/点赞、友链页、公开站接入真实数据。
 
 ## 学习方法建议
 
-- **读代码的推荐顺序**:`R.java` → `GlobalExceptionHandler` → `SecurityConfig` → `PostService` → `PostMapper.xml` → `CommentService` → `kagami-ui/src/api/` → `PostListView.vue`。这条线覆盖了全部核心概念,其余都是变奏。
+- **读代码的推荐顺序**:`R.java` → `GlobalExceptionHandler` → `SecurityConfig` → `PostService` → `PostMapper.xml` → `CommentService` → `ui/src/data/sources/local.ts` → `ui/src/stores/player.ts` → `ui/src/components/VinylPlayer.vue`。这条线覆盖了全部核心概念,其余都是变奏。
 - **改前先跑通、改后必验证**:本项目的每个坑都是在"改完立刻实测"里暴露的。
 - **把每个坑写成一句话教训**(就像踩坑总表那样),比收藏十篇博客有用。
 - 随时可以把本文的某道自测题丢给 AI 助手对答案、要求出变式题、或要求"只提示不给答案"地陪你走某个踩坑点——**让 AI 当陪练,不当替身**。

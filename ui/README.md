@@ -1,6 +1,6 @@
-# Vue 3 + TypeScript + Vite
+# Kagami Public Site (`ui`)
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+The public-facing personal site: home shell, articles, and the always-mounted vinyl player. Built with Vue 3 + TypeScript + Vite using `<script setup>` SFCs (see the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup)); content currently comes from local markdown files in `src/content/posts`.
 
 ## Development
 

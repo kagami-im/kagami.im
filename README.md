@@ -8,9 +8,9 @@ Shipped, in build order:
 
 1. **User system** — registration, JWT auth, profile (`/api/me`), rate limiting
 2. **Content model** — posts/tags/post_tags, public read API + author management API, pagination envelope
-3. **Console** (`kagami-ui`) — post management + markdown editor with live preview
+3. **Management API** — author-side post management (drafts, explicit publish, edit, delete) behind JWT; the console frontend that consumes it is not part of this repository
 4. **Post extras** — pinned posts, word count and reading time on the public detail DTO
-5. **Comments** — two-level comment threads: comment API with moderation (hide/unhide/delete) and console moderation UI; first test suite (Testcontainers + MockMvc, 9 API tests)
+5. **Comments** — two-level comment threads: public read/write APIs plus author moderation endpoints (hide/unhide/delete); first test suite (Testcontainers + MockMvc, 9 API tests)
 6. **Public frontend** (`ui/`) — personal-site home shell with a centralized design-token layer, a 1200px centered layout and a responsive main/sidebar grid. An always-mounted vinyl player morphs between a full-screen intro record and a flat header orb with a hover bar, and its form survives refreshes; content is currently simple placeholders, with the remaining pages, routing and public API integration still to come
 
 Next up (not started): PostgreSQL full-text search, views/likes, and connecting the public frontend to the live API.
@@ -26,18 +26,11 @@ See [docs/learning-guide.md](docs/learning-guide.md) for the full build log: des
 - MyBatis-Plus 3.5.17 + PostgreSQL 18 (schema managed by Flyway)
 - Lombok
 
-**Frontend** (`kagami-ui/`)
+**Public frontend** (`ui/`)
 
-- Vue 3 + TypeScript + Vite 8
-- Pinia, Vue Router, Axios; native controls styled by a small CSS token layer (no component library)
-- markdown-it + shiki for the editor's live preview
-- ESLint + Prettier
-
-**Public site** (`front/`)
-
-- Vue 3 + TypeScript + Vite 8 + Vue Router
-- Centralized CSS design tokens (no component library), markdown-it for article bodies
-- Typed local mock data behind a swappable data layer; all images use a placeholder component
+- Vue 3 + TypeScript + Vite 8, Pinia for shared state (no router yet, no component library)
+- Single-hue OKLCH design-token layer driving light and dark themes
+- markdown-it renders local markdown articles; content lives in `src/content/posts` behind a swappable data layer (`src/data/sources`)
 
 **Infrastructure**
 
@@ -59,8 +52,7 @@ kagami/
 │   ├── application-prod.yml   # Prod profile (database credentials from environment variables)
 │   ├── db/migration/          # Flyway scripts (V1 users → V2 posts/tags → V3 post extras → V4 comments; applied migrations are immutable)
 │   └── keys/                  # RSA key pair (the private key is not tracked; see below)
-├── kagami-ui/                 # Vue 3 console frontend (see kagami-ui/README.md)
-├── front/                     # Vue 3 public site (see front/README.md)
+├── ui/                        # Vue 3 public site (see ui/README.md)
 ├── compose.yaml               # Local PostgreSQL
 ├── docs/                      # learning-guide.md (build log & roadmap), mock_data.sql
 └── pom.xml
@@ -102,17 +94,7 @@ mvnw.cmd spring-boot:run
 
 The `dev` profile is active by default; the server listens on `http://localhost:8080` and Flyway creates the schema (an empty database runs migration V1; a pre-populated one is baselined at version 1).
 
-### 4. Start the console frontend
-
-```bash
-cd kagami-ui
-npm install
-npm run dev
-```
-
-The dev server runs at `http://localhost:5173`, with `/api` requests proxied to `http://localhost:8080` by Vite.
-
-### 5. Start the public frontend
+### 4. Start the public frontend
 
 ```bash
 cd ui
@@ -120,9 +102,9 @@ npm install
 npm run dev
 ```
 
-It serves the public site from `http://localhost:5173` (use `-- --port 5174` if the console is already running on 5173). Content is local mock data, so the backend is not required. See `front/README.md` for architecture and image-replacement notes.
+It serves the public site from `http://localhost:5173`. Content comes from local markdown files, so the backend is not required. See [ui/README.md](ui/README.md) for architecture notes.
 
-### 6. (Optional) Load test data
+### 5. (Optional) Load test data
 
 ```bash
 psql -h localhost -U kagami -d kagami -f docs/mock_data.sql
@@ -201,14 +183,8 @@ Production notes:
 ./mvnw test                     # Run tests
 ./mvnw clean package            # Build the executable jar
 
-# Frontend (inside kagami-ui/)
+# Public frontend (inside ui/)
 npm run build                   # vue-tsc type check + production build
-npm run lint / lint:fix         # ESLint check / autofix
-npm run format / format:check   # Prettier format / verify
-
-# Public site (inside front/)
-npm run build                   # vue-tsc type check + production build
-npm run typecheck               # type check only
 
 # Database
 docker compose ps               # Container status
@@ -218,7 +194,5 @@ docker compose down -v          # Stop and delete the volume (Flyway re-runs V1)
 
 ## Further Reading
 
-- Frontend guide: [kagami-ui/README.md](kagami-ui/README.md)
-- Public site guide: [front/README.md](front/README.md)
-- Frontend style guide: [kagami-ui/docs/development/frontend-style-guide.md](kagami-ui/docs/development/frontend-style-guide.md)
+- Public frontend guide: [ui/README.md](ui/README.md)
 - Build log & learning roadmap: [docs/learning-guide.md](docs/learning-guide.md)
