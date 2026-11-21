@@ -1,7 +1,19 @@
+<script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { useThemeStore } from '../stores/theme'
+import avatarDark from '../assets/avatar-dark.png'
+import avatarLight from '../assets/avatar-light.png'
+
+const themeStore = useThemeStore()
+const { isDark } = storeToRefs(themeStore)
+</script>
+
 <template>
   <section class="profile-card">
     <div class="profile-head">
-      <span class="profile-avatar" aria-hidden="true">K</span>
+      <span class="profile-avatar" aria-hidden="true">
+        <img :src="isDark ? avatarDark : avatarLight" alt="" draggable="false" />
+      </span>
       <div class="profile-identity">
         <h2 class="profile-name">Kagami</h2>
         <p class="profile-bio">......</p>
@@ -40,9 +52,14 @@
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--color-avatar);
-  color: var(--color-text);
-  font-size: 18px;
-  font-weight: 700;
+  overflow: hidden;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .profile-identity {
