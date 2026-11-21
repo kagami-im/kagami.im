@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import coverSrc from '../assets/cover.jpg'
+import coverSrc from '../assets/cover.webp'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
 
@@ -176,7 +176,7 @@ const updateMediaSession = (track: { title: string; artist?: string }) => {
     title: track.title,
     artist: track.artist ?? 'Kagami',
     album: 'Kagami',
-    artwork: [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }],
+    artwork: [{ src: coverSrc, sizes: '1024x1024', type: 'image/webp' }],
   })
 }
 
