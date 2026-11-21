@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import coverSrc from '../assets/cover.webp'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
 
@@ -9,6 +8,9 @@ const playerStore = usePlayerStore()
 const { form } = storeToRefs(playerStore)
 const playlistStore = usePlaylistStore()
 const { tracks, index, loopMode, currentTrack } = storeToRefs(playlistStore)
+
+// The record face is the current track's cover, streamed from the R2 bucket.
+const coverSrc = computed(() => currentTrack.value?.cover ?? '')
 
 const audioElRef = ref<HTMLAudioElement | null>(null)
 const anchorElRef = ref<HTMLElement | null>(null)
@@ -168,7 +170,7 @@ const handleEnded = () => {
   playlistStore.next()
 }
 
-const updateMediaSession = (track: { title: string; artist?: string }) => {
+const updateMediaSession = (track: { title: string; artist?: string; cover: string }) => {
   if (!('mediaSession' in navigator)) {
     return
   }
@@ -176,7 +178,7 @@ const updateMediaSession = (track: { title: string; artist?: string }) => {
     title: track.title,
     artist: track.artist ?? 'Kagami',
     album: 'Kagami',
-    artwork: [{ src: coverSrc, sizes: '1024x1024', type: 'image/webp' }],
+    artwork: [{ src: track.cover, sizes: '1024x1024', type: 'image/webp' }],
   })
 }
 
