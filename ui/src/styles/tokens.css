@@ -8,6 +8,10 @@
   --hue: 286;
   --hue-pink: calc(var(--hue) + 60);
   --hue-blue: calc(var(--hue) - 55);
+  /* Page background hue, sampled from the banner artwork's handoff band
+     (OKLCH H≈334): the art is a warm pink-lavender, so the background
+     follows a warmer offset than the purple primary. */
+  --hue-bg: calc(var(--hue) + 48);
 
   /* Brand roles */
   --color-primary: oklch(0.55 0.16 var(--hue));
@@ -16,11 +20,11 @@
   --color-avatar: oklch(0.98 0.01 var(--hue));
 
   /* Surfaces */
-  --color-bg: oklch(0.97 0.012 var(--hue));
+  --color-bg: oklch(0.97 0.02 var(--hue-bg));
   --color-surface: oklch(0.995 0.004 var(--hue));
   --color-surface-muted: oklch(0.93 0.02 var(--hue));
   --color-nav-surface: oklch(0.94 0.025 var(--hue));
-  --color-hero-surface: oklch(0.92 0.03 var(--hue));
+  --color-hero-surface: oklch(0.88 0.045 var(--hue-bg));
   --color-welcome-surface: oklch(0.995 0.004 var(--hue));
   --color-intro-bg: oklch(0.95 0.025 var(--hue));
 
@@ -88,11 +92,11 @@
   --color-accent-blue: oklch(0.85 0.07 var(--hue-blue));
   --color-avatar: oklch(0.3 0.02 var(--hue));
 
-  --color-bg: oklch(0.16 0.02 var(--hue));
+  --color-bg: oklch(0.16 0.02 var(--hue-bg));
   --color-surface: oklch(0.22 0.025 var(--hue));
   --color-surface-muted: oklch(0.28 0.03 var(--hue));
   --color-nav-surface: oklch(0.27 0.035 var(--hue));
-  --color-hero-surface: oklch(0.28 0.05 var(--hue));
+  --color-hero-surface: oklch(0.28 0.04 var(--hue-bg));
   --color-welcome-surface: oklch(0.26 0.045 var(--hue-pink));
   /* The intro wall is the page wall: aliasing --color-bg makes the backdrop
      fade-out land on the exact same color as the home page, so the reveal is
