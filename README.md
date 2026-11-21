@@ -11,7 +11,7 @@ Shipped, in build order:
 3. **Management API** — author-side post management (drafts, explicit publish, edit, delete) behind JWT; the console frontend that consumes it is not part of this repository
 4. **Post extras** — pinned posts, word count and reading time on the public detail DTO
 5. **Comments** — two-level comment threads: public read/write APIs plus author moderation endpoints (hide/unhide/delete); first test suite (Testcontainers + MockMvc, 9 API tests)
-6. **Public frontend** (`ui/`) — personal-site home shell with a centralized design-token layer, a 1200px centered layout and a responsive main/sidebar grid. An always-mounted vinyl player morphs between a full-screen intro record and a flat header orb with a hover bar, and its form survives refreshes; content is currently simple placeholders, with the remaining pages, routing and public API integration still to come
+6. **Public frontend** (`ui/`) — personal-site home shell with a centralized design-token layer, a 1200px centered layout and a responsive main/sidebar grid. An always-mounted vinyl player morphs between a full-screen intro record and a flat header orb with a hover bar and a JSON-driven playlist, and its form survives refreshes; content is currently simple placeholders, with the remaining pages, routing and public API integration still to come
 
 Next up (not started): PostgreSQL full-text search, views/likes, and connecting the public frontend to the live API.
 
