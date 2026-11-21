@@ -62,12 +62,13 @@ const waveFront = computed(() => buildWavePath({ ...shared, amplitude: 10, basel
    height, cropping the excess rather than leaving gaps or stretching it. */
 .hero-banner {
   position: relative;
+  isolation: isolate;
   width: 100vw;
   height: 66.667vh;
   margin-inline: calc(50% - 50vw);
   overflow: hidden;
   isolation: isolate;
-  background: var(--color-hero-surface) url('/heroBanner.png') center / cover no-repeat;
+  background: var(--color-hero-surface) url('/heroBanner.webp') center / cover no-repeat;
 }
 
 .banner-waves {
@@ -77,5 +78,16 @@ const waveFront = computed(() => buildWavePath({ ...shared, amplitude: 10, basel
   display: block;
   width: 100%;
   height: 60px;
+}
+
+/* Dark mode dims the bright pastel artwork so it doesn't glare against the
+   dark page. The dimmer is a backdrop-filter on ::before: it darkens only the
+   artwork painted on the container background, while the SVG waves above it
+   keep their exact --color-bg match with the page below. */
+html.dark .hero-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: brightness(0.75) saturate(0.85);
 }
 </style>

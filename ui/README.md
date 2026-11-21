@@ -17,7 +17,7 @@ npm run preview    # preview the production build
 src/
 ├── main.ts              # app entry; registers Pinia, imports tokens, base styles and App
 ├── App.vue              # mounts HomeView and VinylPlayer side by side; both stay alive
-├── assets/              # bundled album cover and themed avatar crops for the player
+├── assets/              # themed avatar crops for the profile card
 ├── style.css            # global reset, base typography and the player scroll lock
 ├── stores/
 │   ├── player.ts        # Pinia store: player form (expanded/mini), persisted to localStorage
@@ -38,18 +38,17 @@ src/
 
 ```
 public/                 # static files served at the site root and copied into the build
-├── audio/              # audio files referenced by playlist.json (streamed on demand)
-├── playlist.json       # track list consumed by stores/playlist.ts
+├── playlist.json       # track list consumed by stores/playlist.ts; src/cover point at the R2 bucket
 └── favicon.svg
 ```
 
 ## Design tokens
 
-Colors use the OKLCH color space, driven by a single `--hue: 286` in `src/styles/tokens.css`. The pink and blue accents are hue offsets of the primary (`+60` / `-55`), so changing one hue rethemes the whole site with related accents. Because OKLCH lightness (`L`) is perceptually uniform, each semantic token sets an explicit `L`/`C` step rather than mixing colors ad hoc — this is what keeps module boundaries legible instead of washing out into grey. Two token blocks exist: `:root` (light) and `:root.dark`; both define the same semantic names (`--color-bg`, `--color-surface`, `--color-text`, `--color-border`, shadows, etc.), so components never branch on the mode. No hex values or `color-mix()` remain in components — add or tune colors only in `tokens.css`.
+Colors use the OKLCH color space, driven by a single `--hue: 286` in `src/styles/tokens.css`. The pink and blue accents are hue offsets of the primary (`+60` / `-55`), and the page background carries its own offset (`--hue-bg: +48`, sampled from the banner artwork's handoff band — the art is a warm pink-lavender), so changing one hue rethemes the whole site with related accents. Because OKLCH lightness (`L`) is perceptually uniform, each semantic token sets an explicit `L`/`C` step rather than mixing colors ad hoc — this is what keeps module boundaries legible instead of washing out into grey. Two token blocks exist: `:root` (light) and `:root.dark`; both define the same semantic names (`--color-bg`, `--color-surface`, `--color-text`, `--color-border`, shadows, etc.), so components never branch on the mode. No hex values or `color-mix()` remain in components — add or tune colors only in `tokens.css`.
 
 Dark mode is toggled by the theme button in `AppHeader`: `useThemeStore` flips `isDark`, applies the `dark` class to `<html>`, and persists the choice under `kagami-ui:dark`. `main.ts` re-applies the saved class before mount (falling back to `prefers-color-scheme`) to avoid a flash of the wrong theme.
 
-The home page uses a centered `max-width: 1200px` shell. Above 1024px the content area is a Grid with a fluid main column and a 320px sidebar; below that the sidebar stacks underneath. The banner breaks out of the shell to sit flush with the page top, spanning the full viewport width and two-thirds of its height. The image uses `cover` with a centered focus: it scales proportionally, crops the excess instead of leaving gaps or stretching, and keeps the artwork's baked-in title in frame. A two-layer SVG wave (`BannerWaves`-style, paths generated from Bézier curves) fades the bottom into the page background; both layers use `--color-bg` so they stay derived from the five tokens, never hardcoded. The transparent `AppHeader` is fixed over the artwork so the nav stays pinned while not taking up a separate row. Content layout itself uses flow and Grid with no fixed coordinates.
+The home page uses a centered `max-width: 1200px` shell. Above 1024px the content area is a Grid with a fluid main column and a 320px sidebar; below that the sidebar stacks underneath. The banner breaks out of the shell to sit flush with the page top, spanning the full viewport width and two-thirds of its height. The image (`public/heroBanner.webp`, 1672×941 WebP) uses `cover` with a centered focus: it scales proportionally and crops the excess instead of leaving gaps or stretching, so the artwork's subject stays in frame at any viewport. A two-layer SVG wave (`BannerWaves`-style, paths generated from Bézier curves) fades the bottom into the page background; both layers use `--color-bg` so they stay derived from the five tokens, never hardcoded. The transparent `AppHeader` is fixed over the artwork so the nav stays pinned while not taking up a separate row. Content layout itself uses flow and Grid with no fixed coordinates.
 
 ## State management
 
@@ -67,6 +66,6 @@ In the **mini** form the root layer is `pointer-events: none`; only the orb (and
 
 The form is persisted under `kagami-ui:player-form` on every change: a refresh while docked boots straight to the mini orb with no intro replay. Playback position is not persisted — audio restarts on reload, subject to browser autoplay rules.
 
-Playback is playlist-driven: `public/playlist.json` lists the tracks and `stores/playlist.ts` owns the queue (current index + loop mode, persisted under `kagami-ui:playlist-state`). The `<audio>` element binds `src` to the current track with `preload="metadata"` — visitors download no audio until they press play, and each track (~1 MB/min at 128 kbps) streams on demand. `ended` advances the queue in list mode while `loop="one"` repeats natively; a single-track playlist wraps onto itself, so prev/next just restart it. The hover bar gains prev/next and a playlist toggle; the click-toggled panel lists the tracks (active one highlighted) with the loop mode, closes on outside click, and the Media Session API exposes metadata and transport controls to the OS (lock screen, media keys, headphones).
+Playback is playlist-driven: `public/playlist.json` lists the tracks and `stores/playlist.ts` owns the queue (current index + loop mode, persisted under `kagami-ui:playlist-state`). Audio files and their covers live in the **Cloudflare R2 bucket** (`r2.kagami.im`) — nothing media-related is bundled or committed; `playlist.json` holds the absolute URLs and each track's `cover` field feeds both the record face and the Media Session artwork. The `<audio>` element binds `src` to the current track with `preload="metadata"` — visitors download no audio until they press play, and each track (~1 MB/min at 128 kbps) streams on demand. `ended` advances the queue in list mode while `loop="one"` repeats natively; a single-track playlist wraps onto itself, so prev/next just restart it. The hover bar gains prev/next and a playlist toggle; the click-toggled panel lists the tracks (active one highlighted) with the loop mode, closes on outside click, and the Media Session API exposes metadata and transport controls to the OS (lock screen, media keys, headphones).
 
 Content is placeholder-only for now. Routing and the public API will be wired in when the remaining pages are implemented.
