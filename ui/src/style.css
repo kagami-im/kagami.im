@@ -6,6 +6,10 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Reserve the scrollbar gutter even while the expanded player hides the
+     scrollbar, so the layout width never changes and docking back causes no
+     reflow of the revealed home page. */
+  scrollbar-gutter: stable;
 }
 
 /* Double-clicking blank space is a global gesture for switching views. Browsers
@@ -28,6 +32,18 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* The expanded player is a full-viewport stage: nothing behind it can scroll,
+   and a live scrollbar floating over the backdrop reads as a bug. Root-level
+   overflow owns the viewport directly (no body-propagation quirks); docking
+   restores scrolling. (Toggled by the player store; see player.ts.)
+   With scrollbar-gutter reserving the gutter, the fixed backdrop cannot paint
+   that strip — the canvas underneath shows through — so the html background
+   matches the backdrop while covered, keeping the stage seamless edge to edge. */
+html.player-expanded {
+  overflow: hidden;
+  background: var(--color-intro-bg);
 }
 
 h1,

@@ -238,6 +238,7 @@
 | 公开站 | `pointer-events: none` 只影响命中测试、不影响事件冒泡:穿透层上的子控件双击仍会冒泡触发祖先的全局 dblclick 手势 | 全局 dblclick 监听所在的祖先,要靠每个可交互子控件 `@dblclick.stop` 显式拦停 | `ui/src/components/VinylPlayer.vue` |
 | 公开站 | 展开态与迷你态共用同一个唱片元素,展开态 mouseenter 埋下的 hover 状态会在收起瞬间让悬浮条凭空弹出(指针明明不在其上) | "指针当前是否在上"这类瞬态只在对应形态下跟踪:监听入口按形态门控,形态切换时重置;事件驱动的状态会过期,CSS `:hover` 那种按帧求值才是真状态 | `ui/src/components/VinylPlayer.vue` |
 | 公开站 | 形变飞行的元素扫过静止指针时,Chrome 按"元素移入光标下"补发 mouseenter,悬浮条在飞行途中误弹出 | 形变期间抑制 hover 监听,落定后用 `matches(':hover')` 复核一次:既拦住扫过的误触发,又不丢"指针恰好停在落点"的真悬浮 | `ui/src/components/VinylPlayer.vue` |
+| 公开站 | 全屏舞台背后的页面仍可滚动,滚动条浮在覆盖层上;滚动锁加在 body 上经传播才生效不可靠,且 `scrollbar-gutter` 预留的 gutter 条在覆盖层外露出异色边 | 滚动锁挂根元素:`html.player-expanded { overflow: hidden }` 直接管视口,不依赖 body→视口传播;gutter 条画的是画布背景(html/body 背景传播),展开态把 html 背景设为 `--color-intro-bg` 与覆盖层同色即无接缝;`scrollbar-gutter: stable` 保持布局宽度恒定,解锁零回流 | `ui/src/stores/player.ts` / `ui/src/style.css` |
 | 工程化 | @Valid 的错误映射进 data | 前端字段标红依赖这个形状 | `GlobalExceptionHandler` |
 
 ## 知识点地图(按域,附仓库锚点)
