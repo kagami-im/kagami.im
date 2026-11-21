@@ -13,6 +13,10 @@ dist
 dist-ssr
 *.local
 
+# Audio files stay out of version control: they live in the Cloudflare R2
+# bucket in production. Keep them in public/audio/ locally for development.
+public/audio
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

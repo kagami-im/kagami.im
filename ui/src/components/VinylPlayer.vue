@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import coverSrc from '../assets/cover.jpg'
-import musicSrc from '../assets/music.mp3'
 import { usePlayerStore } from '../stores/player'
-
-// Placeholder until real track metadata exists; shown in the mini hover bar.
-const TRACK_TITLE = 'Kagami'
+import { usePlaylistStore } from '../stores/playlist'
 
 const playerStore = usePlayerStore()
 const { form } = storeToRefs(playerStore)
+const playlistStore = usePlaylistStore()
+const { tracks, index, loopMode, currentTrack } = storeToRefs(playlistStore)
 
 const audioElRef = ref<HTMLAudioElement | null>(null)
 const anchorElRef = ref<HTMLElement | null>(null)
@@ -117,6 +116,130 @@ const scheduleHideMiniBar = () => {
 
 const showMiniBarView = computed(() => form.value === 'mini' && isHovered.value)
 
+// Set when a track should start playing as soon as it is loaded (prev/next,
+// ended auto-advance, playlist click). Consumed by the track-change watcher.
+const pendingPlay = ref(false)
+
+const restartCurrent = () => {
+  const audio = audioElRef.value
+  if (!audio) {
+    return
+  }
+  audio.currentTime = 0
+  void audio.play().catch((e) => console.error('Playback failed', e))
+}
+
+const playTrack = (i: number) => {
+  if (i === index.value) {
+    restartCurrent()
+    return
+  }
+  pendingPlay.value = true
+  playlistStore.setIndex(i)
+}
+
+const playPrev = () => {
+  // A single-track playlist wraps onto itself: prev/next just restart it.
+  if (tracks.value.length <= 1) {
+    restartCurrent()
+    return
+  }
+  pendingPlay.value = true
+  playlistStore.prev()
+}
+
+const playNext = () => {
+  if (tracks.value.length <= 1) {
+    restartCurrent()
+    return
+  }
+  pendingPlay.value = true
+  playlistStore.next()
+}
+
+const handleEnded = () => {
+  // loop="one" repeats natively, so ended only fires in list mode: advance
+  // (a single-track playlist wraps onto itself and restarts).
+  if (tracks.value.length <= 1) {
+    restartCurrent()
+    return
+  }
+  pendingPlay.value = true
+  playlistStore.next()
+}
+
+const updateMediaSession = (track: { title: string; artist?: string }) => {
+  if (!('mediaSession' in navigator)) {
+    return
+  }
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.title,
+    artist: track.artist ?? 'Kagami',
+    album: 'Kagami',
+    artwork: [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }],
+  })
+}
+
+// Metadata must be set for the boot track too (prev is undefined then), while
+// the src reload below only makes sense when the track actually changed.
+watch(currentTrack, (track) => {
+  if (track) {
+    updateMediaSession(track)
+  }
+})
+
+watch(currentTrack, async (track, prev) => {
+  if (!track || !prev) {
+    return
+  }
+  const audio = audioElRef.value
+  if (!audio) {
+    return
+  }
+  const shouldPlay = pendingPlay.value || isPlaying.value
+  pendingPlay.value = false
+  isPlaying.value = false
+  currentTime.value = 0
+  duration.value = 0
+  await nextTick() // let the src attribute land before touching the element
+  if (shouldPlay) {
+    try {
+      await audio.play()
+    } catch (e) {
+      console.error('Playback failed', e)
+    }
+  }
+})
+
+watch(
+  isPlaying,
+  (playing) => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+    }
+  },
+  { immediate: true }
+)
+
+// Playlist panel: click-toggled, closed by any click outside it or the toggle.
+const showPlaylist = ref(false)
+const togglePlaylist = () => {
+  showPlaylist.value = !showPlaylist.value
+}
+const onDocClick = (event: MouseEvent) => {
+  const target = event.target as HTMLElement | null
+  if (!target?.closest('.playlist-panel') && !target?.closest('.bar-list')) {
+    showPlaylist.value = false
+  }
+}
+watch(showPlaylist, (visible) => {
+  if (visible) {
+    document.addEventListener('click', onDocClick)
+  } else {
+    document.removeEventListener('click', onDocClick)
+  }
+})
+
 watch(form, (value) => {
   if (morphTimer !== null) {
     window.clearTimeout(morphTimer)
@@ -131,6 +254,7 @@ watch(form, (value) => {
     hoverTimer = null
   }
   isHovered.value = false
+  showPlaylist.value = false
   if (value === 'mini') {
     isMorphing.value = true
     morphTimer = window.setTimeout(() => {
@@ -155,6 +279,7 @@ onBeforeUnmount(() => {
   if (morphTimer !== null) {
     window.clearTimeout(morphTimer)
   }
+  document.removeEventListener('click', onDocClick)
 })
 
 const handleTimeUpdate = () => {
@@ -183,15 +308,17 @@ const seek = (event: MouseEvent) => {
   currentTime.value = audio.currentTime
 }
 
-onMounted(async () => {
-  const audio = audioElRef.value
-  if (!audio) {
-    return
-  }
-  try {
-    // await audio.play()
-  } catch {
-    // Autoplay may be blocked by the browser; the disc stays still until the album is clicked.
+onMounted(() => {
+  // Expose transport controls to the OS (lock screen, media keys, headphones).
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', () => {
+      void togglePlay()
+    })
+    navigator.mediaSession.setActionHandler('pause', () => {
+      void togglePlay()
+    })
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev())
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
   }
 })
 </script>
@@ -235,6 +362,9 @@ onMounted(async () => {
         @mouseleave="scheduleHideMiniBar"
         @dblclick.stop
       >
+        <button type="button" class="bar-button bar-skip" aria-label="上一首" @click="playPrev">
+          ❮❮
+        </button>
         <button
           type="button"
           class="bar-button"
@@ -243,25 +373,61 @@ onMounted(async () => {
         >
           {{ isPlaying ? '❚❚' : '▶' }}
         </button>
-        <span class="bar-title" :title="TRACK_TITLE">{{ TRACK_TITLE }}</span>
+        <button type="button" class="bar-button bar-skip" aria-label="下一首" @click="playNext">
+          ❯❯
+        </button>
+        <span class="bar-title" :title="currentTrack?.title">{{ currentTrack?.title ?? '…' }}</span>
         <div class="bar-progress" @click="seek">
           <div class="bar-track">
             <div class="bar-fill" :style="{ width: `${progressPercent}%` }"></div>
           </div>
         </div>
         <span class="bar-time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+        <button type="button" class="bar-button bar-list" aria-label="播放列表" @click="togglePlaylist">
+          ☰
+        </button>
+      </div>
+    </Transition>
+
+    <Transition name="bar">
+      <div v-if="showPlaylist && form === 'mini'" class="playlist-panel" @dblclick.stop>
+        <div class="panel-head">
+          <span class="panel-title">播放列表 · {{ tracks.length }}</span>
+          <button
+            type="button"
+            class="panel-loop"
+            :title="loopMode === 'all' ? '切换为单曲循环' : '切换为列表循环'"
+            @click="playlistStore.toggleLoop()"
+          >
+            {{ loopMode === 'all' ? '列表循环' : '单曲循环' }}
+          </button>
+        </div>
+        <ol class="panel-list">
+          <li
+            v-for="(track, i) in tracks"
+            :key="track.src"
+            :class="{ active: i === index }"
+            @click="playTrack(i)"
+          >
+            <span class="track-mark">{{ i === index ? (isPlaying ? '❚❚' : '▶') : i + 1 }}</span>
+            <span class="track-name" :title="track.title">{{ track.title }}</span>
+            <span v-if="track.artist" class="track-artist">{{ track.artist }}</span>
+          </li>
+        </ol>
       </div>
     </Transition>
 
     <audio
+      v-if="currentTrack"
       ref="audioElRef"
-      :src="musicSrc"
-      loop
-      preload="auto"
+      :src="currentTrack.src"
+      :loop="loopMode === 'one'"
+      preload="metadata"
       @play="isPlaying = true"
       @pause="isPlaying = false"
       @timeupdate="handleTimeUpdate"
       @loadedmetadata="handleLoadedMetadata"
+      @ended="handleEnded"
     ></audio>
   </div>
 </template>
@@ -455,6 +621,111 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.bar-skip {
+  font-size: 8px;
+  letter-spacing: -1px;
+  color: var(--color-text-muted);
+}
+
+.bar-list {
+  font-size: 12px;
+}
+
+/* Playlist panel, below the hover bar; click-toggled, click-outside closes. */
+.playlist-panel {
+  position: absolute;
+  top: calc(var(--orb-top) + var(--orb-size) + 10px);
+  right: calc(var(--orb-right) + var(--orb-size) + var(--space-2));
+  width: 280px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.panel-title {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.panel-loop {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-nav-surface);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.panel-loop:hover {
+  color: var(--color-text);
+}
+
+.panel-list {
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  overflow-y: auto;
+}
+
+.panel-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.panel-list li:hover {
+  background: var(--color-surface-muted);
+}
+
+.panel-list li.active {
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.track-mark {
+  width: 18px;
+  flex-shrink: 0;
+  font-size: 10px;
+  text-align: center;
+}
+
+.track-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-artist {
+  flex-shrink: 0;
+  color: var(--color-text-faint);
+  font-size: 11px;
+}
+
 .bar-enter-active,
 .bar-leave-active {
   transition:
@@ -481,6 +752,12 @@ onMounted(async () => {
     right: auto;
     left: var(--space-3);
     top: calc(var(--orb-top) + var(--orb-size) + var(--space-2));
+  }
+
+  .playlist-panel {
+    right: auto;
+    left: var(--space-3);
+    width: calc(100vw - var(--space-6));
   }
 }
 </style>
