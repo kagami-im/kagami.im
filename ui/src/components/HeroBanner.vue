@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { usePlayerStore } from '../stores/player'
 
-const emit = defineEmits<{ back: [] }>()
+const playerStore = usePlayerStore()
 
 interface WaveOptions {
   amplitude: number
@@ -43,7 +44,7 @@ const waveFront = computed(() => buildWavePath({ ...shared, amplitude: 10, basel
 </script>
 
 <template>
-  <section class="hero-banner" aria-label="首页横幅" @dblclick="emit('back')">
+  <section class="hero-banner" aria-label="首页横幅" @dblclick="playerStore.expandPlayer()">
     <svg
       class="banner-waves"
       viewBox="0 0 1200 60"

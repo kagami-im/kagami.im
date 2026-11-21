@@ -227,6 +227,11 @@
 | 公开站 | npm 全局 `omit=dev` 使 devDependencies 不安装,`vue-tsc` 找不到 | `npm install --include=dev` 显式补齐;构建失败先查依赖树 | `front/package.json` |
 | 公开站 | TypeScript 6 弃用 `baseUrl`,`paths` 映射必须相对 | 用 `"@/*": ["./src/*"]`,不要再写 `baseUrl` | `front/tsconfig.app.json` |
 | 公开站 | 双击无文本区域时浏览器选词算法命中 DOM 中最近的文本节点,随机高亮无关文本 | 双击切换是全站手势,就在 `body` 设 `user-select: none` 作默认,再用 `.selectable` 白名单恢复正文;逐个容器打补丁会漏新增区域 | `ui/src/style.css` 的 `body` / `.selectable` |
+| 公开站 | `100vw` 含滚动条宽度,而 fixed 元素的定位基准(布局视口)不含,用它算停靠坐标会钻到视口外 | 停靠位置写在 `inset: 0` 的 fixed 容器里用 `left: calc(100% - …)`,`100%` 按真实布局宽度解析 | `ui/src/components/VinylPlayer.vue` |
+| 公开站 | CSS 形变两端写法不一致(如 `left: 50%` → `auto`)时 `auto` 不参与插值,位置直接瞬移 | 形变两端用同一组可插值 longhand(`calc()` 长度),旋转等 transform 动画放子元素,不与形变争同一个 transform | `ui/src/components/VinylPlayer.vue` |
+| 公开站 | `pointer-events: none` 只影响命中测试、不影响事件冒泡:穿透层上的子控件双击仍会冒泡触发祖先的全局 dblclick 手势 | 全局 dblclick 监听所在的祖先,要靠每个可交互子控件 `@dblclick.stop` 显式拦停 | `ui/src/components/VinylPlayer.vue` |
+| 公开站 | 展开态与迷你态共用同一个唱片元素,展开态 mouseenter 埋下的 hover 状态会在收起瞬间让悬浮条凭空弹出(指针明明不在其上) | "指针当前是否在上"这类瞬态只在对应形态下跟踪:监听入口按形态门控,形态切换时重置;事件驱动的状态会过期,CSS `:hover` 那种按帧求值才是真状态 | `ui/src/components/VinylPlayer.vue` |
+| 公开站 | 形变飞行的元素扫过静止指针时,Chrome 按"元素移入光标下"补发 mouseenter,悬浮条在飞行途中误弹出 | 形变期间抑制 hover 监听,落定后用 `matches(':hover')` 复核一次:既拦住扫过的误触发,又不丢"指针恰好停在落点"的真悬浮 | `ui/src/components/VinylPlayer.vue` |
 | 工程化 | @Valid 的错误映射进 data | 前端字段标红依赖这个形状 | `GlobalExceptionHandler` |
 
 ## 知识点地图(按域,附仓库锚点)

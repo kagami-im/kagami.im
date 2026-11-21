@@ -9,8 +9,9 @@ import ProfileCard from '../components/ProfileCard.vue'
 import DailyNote from '../components/DailyNote.vue'
 import ArticleDetailView from './ArticleDetailView.vue'
 import { useArticlesStore } from '../stores/articles'
+import { usePlayerStore } from '../stores/player'
 
-const emit = defineEmits<{ back: [] }>()
+const playerStore = usePlayerStore()
 const articlesStore = useArticlesStore()
 const { selectedArticle } = storeToRefs(articlesStore)
 
@@ -29,16 +30,21 @@ watch(selectedArticle, (article, previous) => {
 <template>
   <AppHeader />
   <ArticleDetailView v-if="selectedArticle" @back="articlesStore.closeArticle()" />
-  <div v-else class="home-page" @dblclick.self="emit('back')">
-    <div class="home-shell" @dblclick.self="emit('back')">
-      <main class="home-main" @dblclick.self="emit('back')">
-        <HeroBanner @back="emit('back')" />
+  <div
+    v-else
+    class="home-page"
+    :class="{ veiled: playerStore.form === 'expanded' }"
+    @dblclick.self="playerStore.expandPlayer()"
+  >
+    <div class="home-shell" @dblclick.self="playerStore.expandPlayer()">
+      <main class="home-main" @dblclick.self="playerStore.expandPlayer()">
+        <HeroBanner />
         <WelcomePanel />
 
-        <div class="home-columns" @dblclick.self="emit('back')">
+        <div class="home-columns" @dblclick.self="playerStore.expandPlayer()">
           <ArticleList />
 
-          <aside class="home-sidebar" aria-label="侧栏" @dblclick.self="emit('back')">
+          <aside class="home-sidebar" aria-label="侧栏" @dblclick.self="playerStore.expandPlayer()">
             <ProfileCard />
             <DailyNote />
           </aside>
@@ -54,6 +60,40 @@ watch(selectedArticle, (article, previous) => {
   min-height: 100vh;
   padding-block: 0 var(--space-8);
   overflow-x: clip;
+  /* While the player covers the page the content "sinks underwater": dimmed,
+     slightly lowered and blurred. Lifting the veil raises and sharpens it in
+     one motion, so the reveal reads as surfacing, not an unveiled curtain. */
+  transition:
+    opacity 0.8s ease 0.1s,
+    transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) 0.1s,
+    filter 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) 0.1s;
+}
+
+.home-page.veiled {
+  opacity: 0;
+  transform: translateY(16px);
+  filter: blur(6px);
+}
+
+/* Content blocks surface with a slight stagger; the banner stays put as the
+   water surface. Scoped to direct children of .home-main (child component
+   roots carry this component's scope attribute) so inner hover effects are
+   untouched. */
+.home-main > *:nth-child(n + 2) {
+  transition:
+    opacity 0.75s ease 0.25s,
+    transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) 0.25s,
+    filter 0.8s ease 0.25s;
+}
+
+.home-main > *:nth-child(3) {
+  transition-delay: 0.35s;
+}
+
+.home-page.veiled .home-main > *:nth-child(n + 2) {
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(4px);
 }
 
 .home-shell {

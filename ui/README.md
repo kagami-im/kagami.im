@@ -16,17 +16,17 @@ npm run preview    # preview the production build
 ```
 src/
 ├── main.ts              # app entry; registers Pinia, imports tokens, base styles and App
-├── App.vue              # swaps PlayerIntro for HomeView based on the view store
-├── assets/              # bundled album cover and background music for the intro
+├── App.vue              # mounts HomeView and VinylPlayer side by side; both stay alive
+├── assets/              # bundled album cover and background music for the player
 ├── style.css            # global reset and base typography
 ├── stores/
-│   ├── view.ts          # Pinia store: showIntro flag, persisted to localStorage
+│   ├── player.ts        # Pinia store: player form (expanded/mini), persisted to localStorage
 │   └── theme.ts         # Pinia store: isDark flag, applies html.dark, persisted to localStorage
 ├── styles/tokens.css    # OKLCH color system (single hue + light/dark), radius, shadow, spacing, breakpoints
 ├── views/
 │   └── HomeView.vue     # 1200px centered shell; Grid main column + 320px sidebar
 └── components/
-    ├── PlayerIntro.vue  # spinning record splash; dblclick outside the album fades into HomeView
+    ├── VinylPlayer.vue  # always-mounted vinyl: full-screen record or header orb with hover bar
     ├── AppHeader.vue    # transparent nav overlaid on the banner artwork
     ├── HeroBanner.vue   # full-width cover artwork with a two-layer SVG wave into the page
     ├── WelcomePanel.vue # welcome copy and quick entries
@@ -45,10 +45,18 @@ The home page uses a centered `max-width: 1200px` shell. Above 1024px the conten
 
 ## State management
 
-Pinia is registered in `main.ts` and shared state lives in `src/stores/` as setup stores. `view.ts` owns the `showIntro` boolean (persisted as `kagami-ui:show-intro`) with `toggleView()`; `theme.ts` owns `isDark` (persisted as `kagami-ui:dark`) with `toggleTheme()`, applying the `dark` class to `<html>`. Components read/write stores through `useViewStore()` / `useThemeStore()` rather than passing props or touching storage directly. Add future shared state (profile, posts) as additional stores in the same folder.
+Pinia is registered in `main.ts` and shared state lives in `src/stores/` as setup stores. `player.ts` owns the player `form` (`'expanded' | 'mini'`, persisted as `kagami-ui:player-form`, fresh visits default to expanded) with `expandPlayer()` / `collapsePlayer()`; `theme.ts` owns `isDark` (persisted as `kagami-ui:dark`) with `toggleTheme()`, applying the `dark` class to `<html>`. Components read/write stores through `usePlayerStore()` / `useThemeStore()` rather than passing props or touching storage directly. Add future shared state (profile, posts) as additional stores in the same folder.
 
-## Intro splash
+## Vinyl player
 
-On a fresh visit the app shows `PlayerIntro`: a vinyl that spins only while audio is playing. Autoplay is attempted with sound; if the browser blocks it the disc stays still until the album is clicked. Clicking the album toggles play/pause, which starts/stops the spin. Double-clicking anywhere outside the album (but not on the album itself) emits `enter`, and `<Transition mode="out-in">` in `App.vue` fades the splash out before fading `HomeView` in. The transition is reversible: double-clicking blank space in `HomeView` (its layout containers via `.self`, not the content cards) emits `back` and fades the player splash back in. Double-clicking the `HeroBanner` also emits `back`. Because double-click-to-switch is a global gesture, `body` sets `user-select: none` as the site-wide default: browsers resolve a double-click on a textless area to the nearest selectable text node, which previously highlighted unrelated text at random. Adding a new surface is therefore safe by default; opt real reading content back in with the `.selectable` utility (`user-select: text`) only where copying matters (e.g. future article bodies). `App.vue` reads `showIntro` from the Pinia `useViewStore` and calls `toggleView()` on either transition; the store persists the boolean under `kagami-ui:show-intro` in localStorage — first visit defaults to the intro, and a refresh restores whichever view was last shown (intro or home).
+The player is a persistent control that only changes form — it never unmounts. `App.vue` renders `HomeView` and `VinylPlayer` side by side for the whole app lifetime, so audio keeps playing while the player morphs.
+
+On a fresh visit the player boots in its **expanded** form: a fixed full-screen layer whose opaque backdrop hides the home page, leaving only the record visible (the record spins only while audio is playing; playback starts on the first click — autoplay is intentionally left off). Double-clicking anywhere outside the record **collapses** it: the backdrop fades and the home page underneath **surfaces** — `.home-page` carries a veil (driven by the player store) that sinks the content `opacity: 0 + translateY(16px) + blur(6px)` while covered and lifts it back in one motion, with the welcome panel and content columns rising on a slight stagger after the banner, which stays put as the water surface.
+
+The morph is a pure CSS transition on `.album-anchor`: both endpoints (viewport center ↔ the header's action row) are written with the same interpolable longhands — `top` / `left` / `width` / `height` as `calc()` values, never `auto` — so the record continuously shrinks and flies to its dock instead of jumping. The spin keyframes live on the inner `.album` so the morph's position math and the rotation never fight over the same `transform`. Dock geometry mirrors `AppHeader` via `--orb-*` custom properties: a 32px orb, 12px from the top, 96px from the right (92px and 8px top on mobile, where the header uses 12px inline padding and wraps). Docking on `left: calc(100% - …)` — the containing block is the fixed root, so `100%` tracks the real layout viewport excluding the scrollbar, which `100vw` would include.
+
+In the **mini** form the root layer is `pointer-events: none`; only the orb (and its hover bar) opt back in, so the page stays fully clickable underneath. A single click on the orb toggles playback — delayed 250ms so a pending action can be cancelled by a double-click, which re-expands. Hovering opens a control bar (play/pause, seekable progress, track title, time) anchored beside the orb; hiding is delayed so the bar survives moving the pointer onto it. Hover is ignored while the record is mid-morph — Chrome fires enter/leave as the flying element's bounds sweep across a stationary pointer — and after landing a `:hover` re-check opens the bar if the pointer genuinely sits on the dock. Clicks and double-clicks bubble from `pointer-events: auto` descendants through the click-through root, so the bar and the orb stop `dblclick` propagation to avoid accidentally re-triggering the collapse gesture. Double-clicking blank layout space on the home page (containers via `.self`, not content cards) or the `HeroBanner` still re-expands the player — the pre-dock gesture, now mapped to `expandPlayer()`. Because double-click remains a global gesture, `body` keeps `user-select: none` as the site-wide default; opt real reading content back in with the `.selectable` utility only where copying matters (e.g. future article bodies).
+
+The form is persisted under `kagami-ui:player-form` on every change: a refresh while docked boots straight to the mini orb with no intro replay. Playback position is not persisted — audio restarts on reload, subject to browser autoplay rules.
 
 Content is placeholder-only for now. Routing and the public API will be wired in when the remaining pages are implemented.

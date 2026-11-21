@@ -37,13 +37,15 @@
   /* Elevation */
   --shadow-soft: 0 4px 16px oklch(0.4 0.1 var(--hue) / 0.12);
   --shadow-card: 0 10px 30px oklch(0.4 0.1 var(--hue) / 0.15);
+  /* Cover shadow is a halo, not a drop shadow: one centered, wide blur layer
+     wraps the record in an even glow. A single gaussian can never band into
+     rings; spread (4th value) lifts density at the edge without lengthening
+     the tail. Neutral black; hover widens and deepens the same halo. */
   --color-cover-edge: oklch(0.4 0.1 var(--hue) / 0.2);
   --shadow-cover:
-    0 14px 40px oklch(0.4 0.1 var(--hue) / 0.22),
-    0 6px 12px oklch(0.4 0.1 var(--hue) / 0.12);
+    0 0 34px 6px oklch(0 0 0 / 0.26);
   --shadow-cover-hover:
-    0 22px 55px oklch(0.4 0.1 var(--hue) / 0.28),
-    0 10px 18px oklch(0.4 0.1 var(--hue) / 0.16);
+    0 0 42px 8px oklch(0 0 0 / 0.34);
 
   /* Radius */
   --radius-sm: 12px;
@@ -92,7 +94,10 @@
   --color-nav-surface: oklch(0.27 0.035 var(--hue));
   --color-hero-surface: oklch(0.28 0.05 var(--hue));
   --color-welcome-surface: oklch(0.26 0.045 var(--hue-pink));
-  --color-intro-bg: oklch(0.2 0.04 var(--hue));
+  /* The intro wall is the page wall: aliasing --color-bg makes the backdrop
+     fade-out land on the exact same color as the home page, so the reveal is
+     seamless instead of shifting hue mid-fade. */
+  --color-intro-bg: var(--color-bg);
 
   --color-text: oklch(0.92 0.03 var(--hue));
   --color-text-muted: oklch(0.75 0.035 var(--hue));
@@ -105,10 +110,11 @@
   --shadow-soft: 0 4px 16px oklch(0 0 0 / 0.35);
   --shadow-card: 0 10px 30px oklch(0 0 0 / 0.45);
   --color-cover-edge: oklch(0.85 0.08 var(--hue) / 0.25);
+  /* Dark-mode halo is a faint dark rim: black glows barely register on a dark
+     wall, but the bright cover separates from it on its own, so black keeps
+     the halo consistent with the other elevation tokens. */
   --shadow-cover:
-    0 14px 40px oklch(0 0 0 / 0.5),
-    0 6px 12px oklch(0 0 0 / 0.3);
+    0 0 34px 6px oklch(0 0 0 / 0.38);
   --shadow-cover-hover:
-    0 22px 55px oklch(0 0 0 / 0.6),
-    0 10px 18px oklch(0 0 0 / 0.4);
+    0 0 42px 8px oklch(0 0 0 / 0.48);
 }
