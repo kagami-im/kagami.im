@@ -150,15 +150,16 @@ const scheduleHideMiniBar = () => {
     hoverTimer = null
     // Final decision from real state, not events: layout shifts (focus ring,
     // panel render) fire synthetic boundary events under a stationary pointer,
-    // so only hide when neither the orb nor the bar is genuinely hovered or
-    // focused right now.
+    // and dragging scrubs with pointer capture, so only hide when neither the
+    // orb nor the bar is genuinely hovered, focused, or being scrubbed.
     const anchor = anchorElRef.value
     const bar = barElRef.value
     const keep =
+      scrubbing.value ||
       anchor?.matches(':hover') === true ||
       bar?.matches(':hover') === true ||
-      anchor?.matches(':focus') === true ||
-      bar?.matches(':focus') === true
+      anchor?.contains(document.activeElement) === true ||
+      bar?.contains(document.activeElement) === true
     if (!keep) {
       isHovered.value = false
     }
@@ -347,16 +348,81 @@ const handleLoadedMetadata = () => {
 
 const progressElRef = ref<HTMLElement | null>(null)
 
-const seek = (event: MouseEvent) => {
-  const audio = audioElRef.value
+// Scrubbing: pointer-down previews the target position (the audio keeps
+// playing), pointer-up commits a single seek. Commit-on-release avoids
+// firing a Range request at R2 for every pointer move while dragging.
+const scrubbing = ref(false)
+const scrubPercent = ref(0)
+
+const displayPercent = computed(() =>
+  scrubbing.value ? scrubPercent.value : progressPercent.value
+)
+
+const ratioFromClientX = (clientX: number): number | null => {
   const track = progressElRef.value
-  if (!audio || !track || !Number.isFinite(duration.value) || duration.value <= 0) {
-    return
+  if (!track || !Number.isFinite(duration.value) || duration.value <= 0) {
+    return null
   }
   const rect = track.getBoundingClientRect()
-  const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+  return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+}
+
+const onProgressPointerDown = (event: PointerEvent) => {
+  if (!Number.isFinite(duration.value) || duration.value <= 0) {
+    return
+  }
+  const el = event.currentTarget as HTMLElement
+  el.setPointerCapture(event.pointerId)
+  scrubbing.value = true
+  const ratio = ratioFromClientX(event.clientX)
+  if (ratio !== null) {
+    scrubPercent.value = ratio * 100
+  }
+}
+
+const onProgressPointerMove = (event: PointerEvent) => {
+  if (!scrubbing.value) {
+    return
+  }
+  const ratio = ratioFromClientX(event.clientX)
+  if (ratio !== null) {
+    scrubPercent.value = ratio * 100
+  }
+}
+
+const onProgressPointerUp = (event: PointerEvent) => {
+  if (!scrubbing.value) {
+    return
+  }
+  scrubbing.value = false
+  const ratio = ratioFromClientX(event.clientX)
+  const audio = audioElRef.value
+  if (ratio === null || !audio) {
+    return
+  }
   audio.currentTime = ratio * duration.value
   currentTime.value = audio.currentTime
+}
+
+// Arrow keys nudge ±5s; Home/End jump to the ends.
+const onProgressKeydown = (event: KeyboardEvent) => {
+  const audio = audioElRef.value
+  if (!audio || !Number.isFinite(duration.value) || duration.value <= 0) {
+    return
+  }
+  if (event.key === 'ArrowRight') {
+    audio.currentTime = Math.min(duration.value, audio.currentTime + 5)
+    event.preventDefault()
+  } else if (event.key === 'ArrowLeft') {
+    audio.currentTime = Math.max(0, audio.currentTime - 5)
+    event.preventDefault()
+  } else if (event.key === 'Home') {
+    audio.currentTime = 0
+    event.preventDefault()
+  } else if (event.key === 'End') {
+    audio.currentTime = duration.value
+    event.preventDefault()
+  }
 }
 
 onMounted(() => {
@@ -446,9 +512,23 @@ onMounted(() => {
         >
           {{ playbackError ? '⚠ 播放出错' : (currentTrack?.title ?? '…') }}
         </span>
-        <div class="bar-progress" @click="seek">
+        <div
+          ref="progressElRef"
+          class="bar-progress"
+          role="slider"
+          tabindex="0"
+          aria-label="播放进度"
+          :aria-valuemin="0"
+          :aria-valuemax="Math.max(Math.round(duration), 0)"
+          :aria-valuenow="Math.round(currentTime)"
+          :aria-valuetext="`${formatTime(currentTime)} / ${formatTime(duration)}`"
+          @pointerdown="onProgressPointerDown"
+          @pointermove="onProgressPointerMove"
+          @pointerup="onProgressPointerUp"
+          @keydown="onProgressKeydown"
+        >
           <div class="bar-track">
-            <div class="bar-fill" :style="{ width: `${progressPercent}%` }"></div>
+            <div class="bar-fill" :style="{ width: `${displayPercent}%` }"></div>
           </div>
         </div>
         <span class="bar-time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
@@ -695,6 +775,11 @@ onMounted(() => {
   width: 110px;
   height: 14px;
   cursor: pointer;
+}
+
+.bar-progress:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .bar-track {
