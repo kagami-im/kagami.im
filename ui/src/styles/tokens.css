@@ -26,7 +26,9 @@
   --color-nav-surface: oklch(0.94 0.025 var(--hue));
   --color-hero-surface: oklch(0.88 0.045 var(--hue-bg));
   --color-welcome-surface: oklch(0.995 0.004 var(--hue));
-  --color-intro-bg: oklch(0.95 0.025 var(--hue));
+  /* Expanded player stage: pure white in light mode — the record reads like a
+     product shot. Dark mode keeps the page color (the stage blends into the wall). */
+  --color-intro-bg: oklch(1 0 0);
 
   /* Text — L is perceptual, so these read as near-black / near-white. */
   --color-text: oklch(0.3 0.1 var(--hue));
