@@ -1,10 +1,52 @@
 {
   "tracks": [
     {
+      "title": "いつまでも一緒にいよう",
+      "artist": "三輪学",
+      "src": "https://r2.kagami.im/三輪学 - いつまでも一緒にいよう.m4a",
+      "cover": "https://r2.kagami.im/%E4%B8%89%E8%BC%AA%E5%AD%A6%20-%20%E3%81%84%E3%81%A4%E3%81%BE%E3%81%A7%E3%82%82%E4%B8%80%E7%B7%92%E3%81%AB%E3%81%84%E3%82%88%E3%81%86_cover.webp"
+    },
+    {
       "title": "夢の歩みを見上げて",
       "artist": "松本文紀",
       "src": "https://r2.kagami.im/松本文紀 - 夢の歩みを見上げて.m4a",
       "cover": "https://r2.kagami.im/松本文紀 - 夢の歩みを見上げて - cover.webp"
+    },
+    {
+      "title": "儚い願い",
+      "artist": "Famishin",
+      "src": "https://r2.kagami.im/Famishin - 儚い願い.m4a",
+      "cover": "https://r2.kagami.im/Famishin - 儚い願い_cover.webp"
+    },
+    {
+      "title": "雲流れ",
+      "artist": "みかん箱 Foxtail-Grass Studio",
+      "src": "https://r2.kagami.im/みかん箱 Foxtail-Grass Studio - 雲流れ.m4a",
+      "cover": "https://r2.kagami.im/みかん箱 Foxtail-Grass Studio - 雲流れ_cover.webp"
+    },
+    {
+      "title": "歩いても 歩いても",
+      "artist": "ゴンチチ",
+      "src": "https://r2.kagami.im/ゴンチチ - 歩いても 歩いても.m4a",
+      "cover": "https://r2.kagami.im/ゴンチチ - 歩いても 歩いても_cover.webp"
+    },
+    {
+      "title": "優しい風が吹くあの場所で",
+      "artist": "三輪学",
+      "src": "https://r2.kagami.im/三輪学 - 優しい風が吹くあの場所で.m4a",
+      "cover": "https://r2.kagami.im/三輪学 - 優しい風が吹くあの場所で_cover.webp"
+    },
+    {
+      "title": "One more time, One more chance Piano ver",
+      "artist": "天門",
+      "src": "https://r2.kagami.im/天門 - One more time, One more chance Piano ver.m4a",
+      "cover": "https://r2.kagami.im/天門 - One more time, One more chance Piano ver_cover.webp"
+    },
+    {
+      "title": "ツバサ",
+      "artist": "若山詩音",
+      "src": "https://r2.kagami.im/若山詩音 - ツバサ.m4a",
+      "cover": "https://r2.kagami.im/若山詩音 - ツバサ_cover.webp"
     }
   ]
 }
