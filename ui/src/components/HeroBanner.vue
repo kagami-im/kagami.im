@@ -67,7 +67,6 @@ const waveFront = computed(() => buildWavePath({ ...shared, amplitude: 10, basel
   height: 66.667vh;
   margin-inline: calc(50% - 50vw);
   overflow: hidden;
-  isolation: isolate;
   background: var(--color-hero-surface) url('/heroBanner.webp') center / cover no-repeat;
 }
 

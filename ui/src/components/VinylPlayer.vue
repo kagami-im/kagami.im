@@ -7,13 +7,14 @@ import { usePlaylistStore } from '../stores/playlist'
 const playerStore = usePlayerStore()
 const { form } = storeToRefs(playerStore)
 const playlistStore = usePlaylistStore()
-const { tracks, index, loopMode, currentTrack } = storeToRefs(playlistStore)
+const { tracks, index, loopMode, currentTrack, status } = storeToRefs(playlistStore)
 
 // The record face is the current track's cover, streamed from the R2 bucket.
 const coverSrc = computed(() => currentTrack.value?.cover ?? '')
 
 const audioElRef = ref<HTMLAudioElement | null>(null)
 const anchorElRef = ref<HTMLElement | null>(null)
+const barElRef = ref<HTMLElement | null>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
@@ -29,6 +30,21 @@ const formatTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60)
   const padded = String(Math.floor(seconds % 60)).padStart(2, '0')
   return `${minutes}:${padded}`
+}
+
+// R2 fetches can fail mid-stream (offline, bucket misconfig); surface it in
+// the bar instead of failing silently. Cleared when playback works again or
+// the track changes.
+const playbackError = ref(false)
+const handleAudioError = () => {
+  playbackError.value = true
+  isPlaying.value = false
+  console.error('Audio playback error', audioElRef.value?.error)
+}
+
+const onAudioPlay = () => {
+  isPlaying.value = true
+  playbackError.value = false
 }
 
 const togglePlay = async () => {
@@ -77,6 +93,15 @@ const handleAlbumDblclick = () => {
   playerStore.expandPlayer()
 }
 
+// Keyboard activation mirrors a pointer click on the album: play/pause in
+// both forms (the 250ms dblclick guard is pointer-specific and unneeded here).
+const handleAlbumKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    void togglePlay()
+  }
+}
+
 // The hover bar must survive moving the pointer from the orb onto itself, so
 // hiding is delayed and cancelled on re-enter. Hover tracking only exists in
 // mini form: the expanded record is the same element, and letting it arm
@@ -88,9 +113,20 @@ let hoverTimer: number | null = null
 // a stationary pointer, which would flash the bar mid-flight. Swallow hover
 // until the morph settles, then re-check with :hover — a pointer parked on the
 // dock gets the bar even though no further enter event will fire for it.
-const MORPH_SETTLE_MS = 800
+// The settle window is read from the stylesheet (the four morph properties
+// share one duration) so this guard can never drift from the CSS transition.
 const isMorphing = ref(false)
 let morphTimer: number | null = null
+
+const morphSettleMs = (): number => {
+  const anchor = anchorElRef.value
+  if (!anchor) {
+    return 800
+  }
+  const durations = getComputedStyle(anchor).transitionDuration.split(',')
+  const seconds = Math.max(...durations.map((d) => parseFloat(d)))
+  return (Number.isFinite(seconds) ? seconds : 0.7) * 1000 + 100
+}
 
 const showMiniBar = () => {
   if (form.value !== 'mini' || isMorphing.value) {
@@ -112,7 +148,20 @@ const scheduleHideMiniBar = () => {
   }
   hoverTimer = window.setTimeout(() => {
     hoverTimer = null
-    isHovered.value = false
+    // Final decision from real state, not events: layout shifts (focus ring,
+    // panel render) fire synthetic boundary events under a stationary pointer,
+    // so only hide when neither the orb nor the bar is genuinely hovered or
+    // focused right now.
+    const anchor = anchorElRef.value
+    const bar = barElRef.value
+    const keep =
+      anchor?.matches(':hover') === true ||
+      bar?.matches(':hover') === true ||
+      anchor?.matches(':focus') === true ||
+      bar?.matches(':focus') === true
+    if (!keep) {
+      isHovered.value = false
+    }
   }, 200)
 }
 
@@ -265,7 +314,7 @@ watch(form, (value) => {
       if (anchorElRef.value?.matches(':hover')) {
         isHovered.value = true
       }
-    }, MORPH_SETTLE_MS)
+    }, morphSettleMs())
   } else {
     isMorphing.value = false
   }
@@ -321,6 +370,12 @@ onMounted(() => {
     })
     navigator.mediaSession.setActionHandler('previoustrack', () => playPrev())
     navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      const audio = audioElRef.value
+      if (audio && details.seekTime != null) {
+        audio.currentTime = details.seekTime
+      }
+    })
   }
 })
 </script>
@@ -342,7 +397,11 @@ onMounted(() => {
       ref="anchorElRef"
       class="album-anchor"
       role="button"
-      aria-label="音乐播放器"
+      tabindex="0"
+      :aria-label="isPlaying ? '暂停播放' : '播放音乐'"
+      @keydown="handleAlbumKeydown"
+      @focusin="showMiniBar"
+      @focusout="scheduleHideMiniBar"
       @mouseenter="showMiniBar"
       @mouseleave="scheduleHideMiniBar"
     >
@@ -359,9 +418,11 @@ onMounted(() => {
     <Transition name="bar">
       <div
         v-if="showMiniBarView"
+        ref="barElRef"
         class="mini-bar"
         @mouseenter="showMiniBar"
         @mouseleave="scheduleHideMiniBar"
+        @focusout="scheduleHideMiniBar"
         @dblclick.stop
       >
         <button type="button" class="bar-button bar-skip" aria-label="上一首" @click="playPrev">
@@ -378,7 +439,13 @@ onMounted(() => {
         <button type="button" class="bar-button bar-skip" aria-label="下一首" @click="playNext">
           ❯❯
         </button>
-        <span class="bar-title" :title="currentTrack?.title">{{ currentTrack?.title ?? '…' }}</span>
+        <span
+          class="bar-title"
+          :class="{ error: playbackError }"
+          :title="playbackError ? '音频加载或播放失败，请稍后重试' : (currentTrack?.title ?? '')"
+        >
+          {{ playbackError ? '⚠ 播放出错' : (currentTrack?.title ?? '…') }}
+        </span>
         <div class="bar-progress" @click="seek">
           <div class="bar-track">
             <div class="bar-fill" :style="{ width: `${progressPercent}%` }"></div>
@@ -394,8 +461,11 @@ onMounted(() => {
     <Transition name="bar">
       <div v-if="showPlaylist && form === 'mini'" class="playlist-panel" @dblclick.stop>
         <div class="panel-head">
-          <span class="panel-title">播放列表 · {{ tracks.length }}</span>
+          <span class="panel-title">
+            播放列表<template v-if="status === 'ready'"> · {{ tracks.length }}</template>
+          </span>
           <button
+            v-if="status === 'ready'"
             type="button"
             class="panel-loop"
             :title="loopMode === 'all' ? '切换为单曲循环' : '切换为列表循环'"
@@ -404,18 +474,24 @@ onMounted(() => {
             {{ loopMode === 'all' ? '列表循环' : '单曲循环' }}
           </button>
         </div>
-        <ol class="panel-list">
+        <ol v-if="status === 'ready'" class="panel-list">
           <li
             v-for="(track, i) in tracks"
             :key="track.src"
             :class="{ active: i === index }"
+            tabindex="0"
             @click="playTrack(i)"
+            @keydown.enter.prevent="playTrack(i)"
+            @keydown.space.prevent="playTrack(i)"
           >
             <span class="track-mark">{{ i === index ? (isPlaying ? '❚❚' : '▶') : i + 1 }}</span>
             <span class="track-name" :title="track.title">{{ track.title }}</span>
             <span v-if="track.artist" class="track-artist">{{ track.artist }}</span>
           </li>
         </ol>
+        <p v-else class="panel-status">
+          {{ status === 'loading' ? '歌单加载中…' : '歌单加载失败 · 请刷新重试' }}
+        </p>
       </div>
     </Transition>
 
@@ -425,11 +501,12 @@ onMounted(() => {
       :src="currentTrack.src"
       :loop="loopMode === 'one'"
       preload="metadata"
-      @play="isPlaying = true"
+      @play="onAudioPlay"
       @pause="isPlaying = false"
       @timeupdate="handleTimeUpdate"
       @loadedmetadata="handleLoadedMetadata"
       @ended="handleEnded"
+      @error="handleAudioError"
     ></audio>
   </div>
 </template>
@@ -487,6 +564,13 @@ onMounted(() => {
     left 0.7s var(--morph-ease),
     width 0.7s var(--morph-ease),
     height 0.7s var(--morph-ease);
+}
+
+/* Keyboard reachability: the themed focus ring tracks the circular orb and
+   reads on both the pale intro wall and the dark page. */
+.album-anchor:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
 }
 
 .is-mini .album-anchor {
@@ -581,6 +665,12 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.bar-button:focus-visible,
+.panel-loop:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
 .bar-button:hover {
   background: var(--color-surface-muted);
 }
@@ -592,6 +682,11 @@ onMounted(() => {
   white-space: nowrap;
   color: var(--color-text);
   font-size: 13px;
+}
+
+.bar-title.error {
+  color: var(--color-text);
+  font-weight: 600;
 }
 
 .bar-progress {
@@ -699,6 +794,17 @@ onMounted(() => {
 
 .panel-list li:hover {
   background: var(--color-surface-muted);
+}
+
+.panel-list li:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+.panel-status {
+  padding: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 12px;
 }
 
 .panel-list li.active {

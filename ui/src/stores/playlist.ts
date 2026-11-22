@@ -17,6 +17,9 @@ export const usePlaylistStore = defineStore('playlist', () => {
   const tracks = ref<Track[]>([])
   const index = ref(0)
   const loopMode = ref<LoopMode>('all')
+  // Surface the fetch outcome so the playlist panel can render three states
+  // instead of an empty list when /playlist.json fails to load.
+  const status = ref<'loading' | 'ready' | 'failed'>('loading')
 
   const currentTrack = computed(() => tracks.value[index.value] ?? null)
 
@@ -30,12 +33,21 @@ export const usePlaylistStore = defineStore('playlist', () => {
   }
 
   fetch('/playlist.json')
-    .then((resp) => resp.json())
+    .then((resp) => {
+      if (!resp.ok) {
+        throw new Error(`playlist.json responded ${resp.status}`)
+      }
+      return resp.json()
+    })
     .then((data: { tracks?: Track[] }) => {
       tracks.value = data.tracks ?? []
       if (index.value >= tracks.value.length) index.value = 0
+      status.value = 'ready'
     })
-    .catch((e) => console.error('Playlist load failed', e))
+    .catch((e) => {
+      console.error('Playlist load failed', e)
+      status.value = 'failed'
+    })
 
   const setIndex = (i: number) => {
     index.value = Math.min(Math.max(i, 0), Math.max(tracks.value.length - 1, 0))
@@ -51,5 +63,5 @@ export const usePlaylistStore = defineStore('playlist', () => {
     localStorage.setItem(STATE_KEY, JSON.stringify({ index: i, loopMode: mode }))
   })
 
-  return { tracks, index, loopMode, currentTrack, setIndex, next, prev, toggleLoop }
+  return { tracks, index, loopMode, status, currentTrack, setIndex, next, prev, toggleLoop }
 })
