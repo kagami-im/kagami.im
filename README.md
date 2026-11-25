@@ -1,198 +1,146 @@
 # Kagami
 
-Kagami is a full-stack web application, currently in its early stage. The core is a complete user system: registration, login, stateless JWT authentication, and a current-user profile endpoint, plus a content domain on top of it: posts with Markdown bodies, tags, drafts and an explicit publish workflow, exposed both as a public read API and as an author management API.
+A full-stack personal site and content backend: stateless RS256 JWT authentication, Markdown posts & tags (public read + author management APIs), two-level comments with moderation, and a Vue 3 public frontend (`ui/`).
 
 ## Project Status
 
-Shipped, in build order:
+Shipped:
 
-1. **User system** — registration, JWT auth, profile (`/api/me`), rate limiting
-2. **Content model** — posts/tags/post_tags, public read API + author management API, pagination envelope
-3. **Management API** — author-side post management (drafts, explicit publish, edit, delete) behind JWT; the console frontend that consumes it is not part of this repository
-4. **Post extras** — pinned posts, word count and reading time on the public detail DTO
-5. **Comments** — two-level comment threads: public read/write APIs plus author moderation endpoints (hide/unhide/delete); first test suite (Testcontainers + MockMvc, 9 API tests)
-6. **Public frontend** (`ui/`) — personal-site home shell with a centralized design-token layer, a 1200px centered layout and a responsive main/sidebar grid. An always-mounted vinyl player morphs between a full-screen intro record and a flat header orb with a hover bar and a JSON-driven playlist whose media streams from Cloudflare R2, and its form survives refreshes; content is currently simple placeholders, with the remaining pages, routing and public API integration still to come
+1. **User system** — registration, login, RS256 JWT auth, `/api/me`, per-IP rate limiting
+2. **Content model** — `posts` / `tags` / `post_tags`, public read API, author management API (drafts, explicit publish, edit, delete), pagination envelope
+3. **Post extras** — pinned posts, word count, and reading time computed on write
+4. **Comments** — two-level threads (public read, signed-in write, author hide/unhide/delete) + Testcontainers/MockMvc integration suite (9 tests)
+5. **Public frontend (`ui/`)** — OKLCH light/dark theme, 1200px responsive home shell, local Markdown article list & detail reader (`src/content/posts` behind `src/data/sources`), and an always-mounted morphing vinyl player streaming an 8-track playlist from Cloudflare R2
 
-Next up (not started): PostgreSQL full-text search, views/likes, and connecting the public frontend to the live API.
-
-See [docs/learning-guide.md](docs/learning-guide.md) for the full build log: design decisions, knowledge points and pitfalls of every phase, written as a from-scratch roadmap.
+Next up: PostgreSQL full-text search, views/likes, frontend routing/nav/search, and wiring `ui/` to the live backend API.
 
 ## Tech Stack
 
-**Backend** (`src/`)
-
-- Java 25, Spring Boot 4.1.0 (Web MVC, Validation, Security, Flyway)
-- Spring Security + Nimbus JOSE JWT (tokens signed and verified with an RSA key pair)
-- MyBatis-Plus 3.5.17 + PostgreSQL 18 (schema managed by Flyway)
-- Lombok
-
-**Public frontend** (`ui/`)
-
-- Vue 3 + TypeScript + Vite 8, Pinia for shared state (no router yet, no component library)
-- Single-hue OKLCH design-token layer driving light and dark themes
-- markdown-it renders local markdown articles; content lives in `src/content/posts` behind a swappable data layer (`src/data/sources`)
-
-**Infrastructure**
-
-- Docker Compose provides PostgreSQL 18.4 (Redis / RabbitMQ / Elasticsearch went away with the features that needed them)
+- **Backend (`src/`)**: Java 25, Spring Boot 4.1.0 (Web MVC, Validation, Security, Flyway), Nimbus JOSE JWT 10.9.1 (RS256), Bucket4j 8.21.0 + Caffeine, MyBatis-Plus 3.5.17, PostgreSQL 18, Lombok, JUnit 5 + Testcontainers 1.21.4 + MockMvc
+- **Public frontend (`ui/`)**: Vue 3, TypeScript 6, Vite 8, Pinia 4, `markdown-it` (no component library, no router yet), single-hue OKLCH design tokens
+- **Infrastructure**: Docker Compose (`postgres:18.4`), Cloudflare R2 (`r2.kagami.im`) for player media
 
 ## Project Layout
 
-```
+```text
 kagami/
 ├── src/main/java/im/kagami/
-│   ├── common/        # Shared layer: R envelope, PageResponse, global exceptions, audit field filling, Clock
-│   ├── security/      # Auth: JWT filter, key config, login/register endpoints, @AnonymousAccess
-│   ├── user/          # User module: users table, /api/me endpoint
-│   ├── post/          # Content module: posts/tags tables, public read API, author management API
+│   ├── common/        # R envelope, PageResponse, GlobalExceptionHandler/ErrorCode, CurrentUser, Clock
+│   ├── data/          # MyBatis-Plus pagination plugin, AuditMetaObjectHandler
+│   ├── security/      # JWT filter/keys, AuthController, @AnonymousAccess, @RateLimit (Bucket4j)
+│   ├── user/          # users table, /api/me
+│   ├── post/          # posts/tags tables, public read API, author management API
+│   ├── comment/       # two-level comment threads, public & moderation APIs
 │   └── KagamiApplication.java
 ├── src/main/resources/
-│   ├── application.yml        # Shared config (JWT parameters, Flyway)
-│   ├── application-dev.yml    # Dev profile (local database, debug logging)
-│   ├── application-prod.yml   # Prod profile (database credentials from environment variables)
-│   ├── db/migration/          # Flyway scripts (V1 users → V2 posts/tags → V3 post extras → V4 comments; applied migrations are immutable)
-│   └── keys/                  # RSA key pair (the private key is not tracked; see below)
-├── ui/                        # Vue 3 public site (see ui/README.md)
-├── compose.yaml               # Local PostgreSQL
-├── docs/                      # learning-guide.md (build log & roadmap), mock_data.sql
+│   ├── application{,-dev,-prod}.yml
+│   ├── db/migration/  # Immutable Flyway scripts: V1 users → V2 posts/tags → V3 post extras → V4 comments
+│   ├── mapper/        # MyBatis XML mappers (User, Post, Tag, PostTag)
+│   └── keys/          # RSA key pair (private_key.pem is gitignored)
+├── src/test/java/im/kagami/comment/
+│   └── CommentApiControllerTest.java
+├── ui/                # Vue 3 public site (see ui/README.md)
+├── compose.yaml       # Local PostgreSQL 18.4
+├── docs/              # learning-guide.md (design notes & pitfalls), mock_data.sql
 └── pom.xml
 ```
 
 ## Getting Started
 
-Prerequisites: JDK 25, Docker, Node.js ≥ 20.19 (required by Vite 8).
+Prerequisites: JDK 25, Docker, Node.js >= 20.19 (Vite 8).
 
-### 1. Start the database
+1. **Start PostgreSQL**:
+   ```bash
+   docker compose up -d postgres
+   ```
+   Defaults: `localhost:5432`, DB/user/password `kagami` / `kagami` / `123456` (override via `.env`).
 
-```bash
-docker compose up -d postgres
-```
+2. **Generate RSA key pair** (placed under `src/main/resources/keys/`; `private_key.pem` is not tracked):
+   ```bash
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private_key_pkcs1.pem
+   openssl pkcs8 -topk8 -inform PEM -outform PEM -in private_key_pkcs1.pem -out private_key.pem -nocrypt
+   openssl rsa -in private_key_pkcs1.pem -pubout -out public_key.pem
+   ```
 
-Default connection parameters are `localhost:5432`, database/user/password `kagami` / `kagami` / `123456`. Place a `.env` file in the repository root to override them (e.g. `POSTGRES_PASSWORD=xxx`).
+3. **Run backend** (`dev` profile by default, listens on `http://localhost:8080`, Flyway auto-migrates):
+   ```bash
+   ./mvnw spring-boot:run      # Windows: mvnw.cmd spring-boot:run
+   ```
 
-### 2. Generate the JWT key pair
+4. **Run public frontend** (`http://localhost:5173`; reads local Markdown, backend not required):
+   ```bash
+   cd ui && npm install && npm run dev
+   ```
 
-The private key is deliberately not tracked (see `.gitignore`), so a fresh clone needs its own RSA key pair in `src/main/resources/keys/`:
-
-```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private_key_pkcs1.pem
-openssl pkcs8 -topk8 -inform PEM -outform PEM -in private_key_pkcs1.pem -out private_key.pem -nocrypt
-openssl rsa -in private_key_pkcs1.pem -pubout -out public_key.pem
-```
-
-Place the resulting `private_key.pem` and `public_key.pem` under `src/main/resources/keys/`.
-
-### 3. Start the backend
-
-```bash
-# Linux / macOS
-./mvnw spring-boot:run
-
-# Windows
-mvnw.cmd spring-boot:run
-```
-
-The `dev` profile is active by default; the server listens on `http://localhost:8080` and Flyway creates the schema (an empty database runs migration V1; a pre-populated one is baselined at version 1).
-
-### 4. Start the public frontend
-
-```bash
-cd ui
-npm install
-npm run dev
-```
-
-It serves the public site from `http://localhost:5173`. Content comes from local markdown files, so the backend is not required. See [ui/README.md](ui/README.md) for architecture notes.
-
-### 5. (Optional) Load test data
-
-```bash
-psql -h localhost -U kagami -d kagami -f docs/mock_data.sql
-```
-
-The script generates 1,000 test users (`user0001` – `user1000`), all with the password `12345678`, ready to log in, plus 40 posts (80% published) written by `user0001` – `user0050` and 10 tags.
+5. **Load mock data (optional)**:
+   ```bash
+   psql -h localhost -U kagami -d kagami -f docs/mock_data.sql
+   ```
+   Seeds 1,000 users (`user0001`–`user1000`, password `12345678`), 40 posts, and 10 tags.
 
 ## API Overview
 
-| Method | Path                                  | Auth       | Description                                        |
-| ------ | ------------------------------------- | ---------- | -------------------------------------------------- |
-| POST   | `/api/register`                       | Anonymous  | Register (username, password, nickname)            |
-| POST   | `/api/login`                          | Anonymous  | Log in, returns an access token                    |
-| GET    | `/api/me`                             | JWT        | Current signed-in user                             |
-| GET    | `/api/ciallo`                         | Anonymous  | Easter egg                                         |
-| GET    | `/api/posts`                          | Anonymous  | Published posts, paginated (`page`, `size`, `tag`) |
-| GET    | `/api/posts/archives`                 | Anonymous  | All published posts in minimal form                |
-| GET    | `/api/posts/{slugOrId}`               | Anonymous  | One published post (numeric segment = id, else slug) |
-| GET    | `/api/tags`                           | Anonymous  | All tags with published-post counts                |
-| GET    | `/api/manage/posts`                   | JWT        | Own posts, paginated (`status`, `keyword` filters) |
-| GET    | `/api/manage/posts/{id}`              | JWT        | Own post for editing, any status                   |
-| POST   | `/api/manage/posts`                   | JWT        | Create a draft (title, content, tags, …)           |
-| PUT    | `/api/manage/posts/{id}`              | JWT        | Update editable fields; publish state untouched    |
-| POST   | `/api/manage/posts/{id}/publish`      | JWT        | Publish a draft (idempotent)                       |
-| DELETE | `/api/manage/posts/{id}`              | JWT        | Delete own post                                    |
-| GET    | `/api/posts/{slugOrId}/comments`      | Anonymous  | Visible two-level comment threads                  |
-| POST   | `/api/posts/{slugOrId}/comments`      | JWT        | Create a comment or a reply (signed-in users)      |
-| GET    | `/api/manage/comments?postId`         | JWT        | All comments on the author's post (moderation)     |
-| POST   | `/api/manage/comments/{id}/hide`      | JWT        | Hide a comment (post author)                       |
-| POST   | `/api/manage/comments/{id}/unhide`    | JWT        | Unhide a comment (post author)                     |
-| DELETE | `/api/manage/comments/{id}`           | JWT        | Delete a comment (comment or post author)          |
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| POST | `/api/register` | Anonymous | Register (`username`, `password`, `nickname`) |
+| POST | `/api/login` | Anonymous | Log in, returns `{ accessToken, expiresIn }` |
+| GET | `/api/me` | JWT | Current signed-in user |
+| GET | `/api/ciallo` | Anonymous | Easter egg |
+| GET | `/api/posts` | Anonymous | Published posts, paginated (`page`, `size`, `tag`) |
+| GET | `/api/posts/archives` | Anonymous | All published posts in minimal form |
+| GET | `/api/posts/{slugOrId}` | Anonymous | Published post detail (numeric = id, else slug) |
+| GET | `/api/tags` | Anonymous | All tags with published-post counts |
+| GET | `/api/manage/posts` | JWT | Own posts, paginated (`status`, `keyword`) |
+| GET | `/api/manage/posts/{id}` | JWT | Own post for editing, any status |
+| POST | `/api/manage/posts` | JWT | Create draft |
+| PUT | `/api/manage/posts/{id}` | JWT | Update editable fields (publish state untouched) |
+| POST | `/api/manage/posts/{id}/publish` | JWT | Publish draft (idempotent) |
+| DELETE | `/api/manage/posts/{id}` | JWT | Delete own post |
+| GET | `/api/posts/{slugOrId}/comments` | Anonymous | Visible two-level comment threads |
+| POST | `/api/posts/{slugOrId}/comments` | JWT | Create top-level comment or reply |
+| GET | `/api/manage/comments?postId` | JWT | All comments on author's post (moderation) |
+| POST | `/api/manage/comments/{id}/hide` | JWT | Hide comment (post author) |
+| POST | `/api/manage/comments/{id}/unhide` | JWT | Unhide comment (post author) |
+| DELETE | `/api/manage/comments/{id}` | JWT | Delete comment (comment or post author) |
 
-Every response is wrapped into a uniform envelope by `ResultWrapperAdvice`:
+All responses are wrapped by `ResultWrapperAdvice` as `{ "code": 200, "msg": "success", "data": ... }` (business error codes: `1xxxx` user/auth, `2xxxx` content/comments, `9xxxx` common/system). Pass JWT via `Authorization: Bearer <token>`.
 
-```json
-{ "code": 200, "msg": "success", "data": { } }
-```
+## Auth & Rate Limiting
 
-On login, `data` is `{ "accessToken": "...", "expiresIn": 900 }` (`expiresIn` in seconds); the frontend stores the token and sends it via the `Authorization: Bearer <token>` header.
-
-## Authentication Design
-
-- **Stateless JWT**: sessions and CSRF/CORS are disabled; `JwtAuthenticationFilter` validates the token on every request.
-- **RS256 signing**: the private key signs, the public key verifies; key locations come from `jwt.rsa.*`.
-- **15-minute expiry**: `jwt.expiration-in: 900` (seconds). Tokens are not renewed; a client signs in again after expiry.
-- **Declarative anonymous endpoints**: annotate a controller class or method with `@AnonymousAccess` and `AnonymousUrlCollector` collects them at startup and permits them; everything else requires a valid JWT.
-- **Password storage**: BCryptPasswordEncoder (strength 10).
-- **Account status**: `users.status` `0` = active, `1` = banned; only `status = 0` may log in.
-
-## Rate Limiting
-
-Rate limiting is built on bucket4j: a token bucket per client IP and per route, declared with `@RateLimit` on controller classes or methods (method-level wins). Login allows 5 requests/minute/IP, register 3, and all other limited routes their own capacity; attempts are counted regardless of their outcome, and exceeding a limit returns `429` with an `R` body plus a `Retry-After` header. Behind a reverse proxy, forward the real client address in `X-Forwarded-For` so each client gets its own bucket instead of sharing the proxy's.
-
-Buckets currently live in process memory (Caffeine, size-bounded and idle-evicted), which is right for single-node deployment. Storage sits behind the `BucketProvider` seam selected by `kagami.rate-limit.backend` — moving to a cluster-wide Redis backend later only adds a provider and flips that one property; annotations, interceptor and controllers stay untouched.
+- **Auth**: Stateless RS256 JWT (`jwt.expiration-in: 900`s, no refresh); sessions and CSRF/CORS are disabled. Endpoints annotated with `@AnonymousAccess` are collected at startup by `AnonymousUrlCollector`; all other routes require JWT. Passwords use BCrypt (strength 10); only `users.status = 0` (active) can log in.
+- **Rate limiting**: `@RateLimit` + Bucket4j token buckets per client IP (`X-Forwarded-For` aware) and route (e.g. login 5/min, register 3/min). Returns `429` with `R` body and `Retry-After`. Buckets live in Caffeine (`kagami.rate-limit.backend: local`) behind `BucketProvider` for future Redis swap.
 
 ## Configuration
 
-| Environment variable           | Purpose                            | Default              |
-| ------------------------------ | ---------------------------------- | -------------------- |
-| `SPRING_PROFILES_ACTIVE`       | Spring profile (dev/prod)          | `dev`                |
-| `DB_HOST` / `DB_PORT`          | Database address (prod)            | `localhost` / `5432` |
-| `DB_NAME`                      | Database name (prod)               | `kagami`             |
-| `DB_USERNAME` / `DB_PASSWORD`  | Database credentials (prod)        | `kagami` / `123456`  |
-| `POSTGRES_*`                   | Container bootstrap (compose)      | see `compose.yaml`   |
+| Environment variable | Purpose | Default |
+| --- | --- | --- |
+| `SPRING_PROFILES_ACTIVE` | Active profile (`dev` / `prod`) | `dev` |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | Database address (`prod`) | `localhost` / `5432` / `kagami` |
+| `DB_USERNAME` / `DB_PASSWORD` | Database credentials (`prod`) | `kagami` / `123456` |
+| `POSTGRES_*` | Container bootstrap (`compose.yaml`) | `kagami` / `123456` |
 
-Production notes:
-
-- Activate the production profile with `SPRING_PROFILES_ACTIVE=prod`; all database credentials come from environment variables.
-- Inject the JWT keys via environment variables or a mounted volume — never ship them inside the artifact.
-- Flyway does not baseline in prod (`baseline-on-migrate: false`); baseline by hand before the first deployment.
+Production notes: set `SPRING_PROFILES_ACTIVE=prod`, mount/inject RSA keys outside the JAR, and baseline Flyway manually (`baseline-on-migrate: false` in prod).
 
 ## Common Commands
 
 ```bash
-# Backend
-./mvnw test                     # Run tests
-./mvnw clean package            # Build the executable jar
+# Backend (use mvnw.cmd on Windows)
+./mvnw compile                  # Compile check
+./mvnw test                     # Run tests (requires Docker for Testcontainers)
+./mvnw clean package            # Build executable JAR
 
 # Public frontend (inside ui/)
+npm run dev                     # Dev server at http://localhost:5173
 npm run build                   # vue-tsc type check + production build
+npm run preview                 # Preview production build
 
 # Database
 docker compose ps               # Container status
-docker compose down             # Stop, keeping the data volume
-docker compose down -v          # Stop and delete the volume (Flyway re-runs V1)
+docker compose down             # Stop, keeping volume
+docker compose down -v          # Stop and wipe volume (Flyway re-runs V1)
 ```
 
 ## Further Reading
 
-- Public frontend guide: [ui/README.md](ui/README.md)
-- Build log & learning roadmap: [docs/learning-guide.md](docs/learning-guide.md)
+- Public frontend architecture: [ui/README.md](ui/README.md)
+- Design notes & pitfalls: [docs/learning-guide.md](docs/learning-guide.md)

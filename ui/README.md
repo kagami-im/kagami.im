@@ -1,71 +1,83 @@
 # Kagami Public Site (`ui`)
 
-The public-facing personal site: home shell, articles, and the always-mounted vinyl player. Built with Vue 3 + TypeScript + Vite using `<script setup>` SFCs (see the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup)); content currently comes from local markdown files in `src/content/posts`.
+Personal site built with Vue 3 + TypeScript + Vite (`<script setup>` SFCs, Pinia, `markdown-it`, zero component libraries). Articles currently load from local Markdown files in `src/content/posts`.
 
-## Development
+## Commands
 
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm run build      # vue-tsc type check + production build
-npm run preview    # preview the production build
+npm run build      # vue-tsc -b type check + Vite production build
+npm run preview    # preview production build
 ```
 
 ## Layout
 
-```
+```text
 src/
-├── main.ts              # app entry; registers Pinia, imports tokens, base styles and App
-├── App.vue              # mounts HomeView and VinylPlayer side by side; both stay alive
-├── assets/              # themed avatar crops for the profile card
-├── style.css            # global reset, base typography and the player scroll lock
+├── main.ts                  # applies saved theme before mount, registers Pinia, mounts App
+├── App.vue                  # keeps HomeView and VinylPlayer always mounted side by side
+├── assets/                  # theme-swapping avatars (avatar-light.png, avatar-dark.png)
+├── content/posts/           # local Markdown articles with YAML-style frontmatter
+├── data/
+│   ├── types.ts             # Article, ArticleBody, Frontmatter, ParsedMarkdown
+│   ├── frontmatter.ts       # minimal `---` frontmatter parser
+│   ├── markdown.ts          # markdown-it renderer (html: false, linkify: true, breaks: true)
+│   └── sources/
+│       ├── index.ts         # swappable data-source facade (pinned first, then publishedAt desc)
+│       └── local.ts         # eager import.meta.glob(?raw) loader for src/content/posts/*.md
 ├── stores/
-│   ├── player.ts        # Pinia store: player form (expanded/mini), persisted to localStorage
-│   ├── playlist.ts      # Pinia store: track queue from /playlist.json, index + loop mode, persisted
-│   └── theme.ts         # Pinia store: isDark flag, applies html.dark, persisted to localStorage
-├── styles/tokens.css    # OKLCH color system (single hue + light/dark), radius, shadow, spacing, breakpoints
+│   ├── articles.ts          # article list + detail-view selection (selectedArticle / articleBody)
+│   ├── player.ts            # player form ('expanded' | 'mini'), toggles html.player-expanded
+│   ├── playlist.ts          # track queue from /playlist.json, current index & loop mode
+│   └── theme.ts             # isDark flag, toggles html.dark
+├── styles/tokens.css        # single-hue OKLCH palette (light & dark), radius, shadow, spacing, breakpoints
+├── style.css                # reset, base typography, .selectable opt-in, root scroll lock
 ├── views/
-│   └── HomeView.vue     # 1200px centered shell; Grid main column + 320px sidebar
+│   ├── HomeView.vue         # 1200px shell (fluid main + 320px sidebar); toggles ArticleDetailView & restores scrollY
+│   └── ArticleDetailView.vue # Markdown article reader
 └── components/
-    ├── VinylPlayer.vue  # always-mounted vinyl: full-screen record or header orb with hover bar + playlist
-    ├── AppHeader.vue    # transparent nav overlaid on the banner artwork
-    ├── HeroBanner.vue   # full-width cover artwork with a two-layer SVG wave into the page
-    ├── WelcomePanel.vue # welcome copy and quick entries
-    ├── ArticleList.vue  # latest articles (skeleton placeholders)
-    ├── ProfileCard.vue  # author card with a theme-swapping avatar
-    └── DailyNote.vue    # daily note card
+    ├── VinylPlayer.vue      # persistent vinyl: full-screen stage <-> header orb + hover bar, drag seek & playlist
+    ├── AppHeader.vue        # fixed transparent nav overlaid on banner
+    ├── HeroBanner.vue       # full-bleed cover artwork with two-layer SVG wave into --color-bg
+    ├── WelcomePanel.vue     # welcome card & quick links
+    ├── ArticleList.vue      # renders articles from useArticlesStore(); opens ArticleDetailView
+    ├── ProfileCard.vue      # author card with theme-swapping avatar
+    └── DailyNote.vue        # daily note card
+
+public/
+├── playlist.json            # 8-track queue pointing to Cloudflare R2 (r2.kagami.im)
+├── heroBanner.webp          # 1672x941 WebP banner artwork
+├── favicon.svg
+└── audio/                   # (gitignored) optional local media for dev
 ```
 
-```
-public/                 # static files served at the site root and copied into the build
-├── playlist.json       # track list consumed by stores/playlist.ts; src/cover point at the R2 bucket
-└── favicon.svg
-```
+## Architecture & Conventions
 
-## Design tokens
+### Design Tokens & Layout
+- **Single-hue OKLCH (`src/styles/tokens.css`)**: `--hue: 286` drives the whole palette (`--hue-pink: +60`, `--hue-blue: -55`, `--hue-bg: +48` sampled from the banner). `:root` and `:root.dark` share identical semantic token names, so components never branch on theme mode.
+- **Strict token rule**: no hex colors or `color-mix()` in components — tune colors only in `tokens.css`.
+- **Intro stage color**: light mode uses pure white `--color-intro-bg: oklch(1 0 0)` for a product-shot look; dark mode aliases `--color-bg` for a seamless fade.
+- **Theme persistence**: `useThemeStore` persists `kagami-ui:dark` and toggles `html.dark`; `main.ts` applies it before mount (falling back to `prefers-color-scheme`) to prevent FOUC.
+- **Responsive grid**: centered `1200px` shell; above `1024px` fluid main + `320px` sidebar, stacked below. `HeroBanner` breaks out to full viewport width and blends into `--color-bg` via a two-layer SVG wave.
 
-Colors use the OKLCH color space, driven by a single `--hue: 286` in `src/styles/tokens.css`. The pink and blue accents are hue offsets of the primary (`+60` / `-55`), and the page background carries its own offset (`--hue-bg: +48`, sampled from the banner artwork's handoff band — the art is a warm pink-lavender), so changing one hue rethemes the whole site with related accents. Because OKLCH lightness (`L`) is perceptually uniform, each semantic token sets an explicit `L`/`C` step rather than mixing colors ad hoc — this is what keeps module boundaries legible instead of washing out into grey. Two token blocks exist: `:root` (light) and `:root.dark`; both define the same semantic names (`--color-bg`, `--color-surface`, `--color-text`, `--color-border`, shadows, etc.), so components never branch on the mode. No hex values or `color-mix()` remain in components — add or tune colors only in `tokens.css`.
+### State & Data Layer
+- **Pinia setup stores (`src/stores/`)**:
+  - `articles.ts` — synchronous list from `src/data/sources` + `selectedArticle` / `articleBody` / `openArticle()` / `closeArticle()`. Without Vue Router yet, `HomeView.vue` swaps to `ArticleDetailView.vue` and saves/restores `window.scrollY`.
+  - `player.ts` — `form` (`'expanded' | 'mini'`, persisted as `kagami-ui:player-form`, default `'expanded'`), toggles `html.player-expanded`.
+  - `playlist.ts` — fetches `/playlist.json`, tracks `status` (`'loading' | 'ready' | 'failed'`), `index`, and `loopMode` (`'all' | 'one'`), persisted as `kagami-ui:playlist-state`.
+  - `theme.ts` — `isDark` (`kagami-ui:dark`).
+- **Swappable article source**: components only talk to `useArticlesStore()`, which reads `src/data/sources/index.ts`. Wiring `/api/posts` later only replaces the source implementation.
 
-Dark mode is toggled by the theme button in `AppHeader`: `useThemeStore` flips `isDark`, applies the `dark` class to `<html>`, and persists the choice under `kagami-ui:dark`. `main.ts` re-applies the saved class before mount (falling back to `prefers-color-scheme`) to avoid a flash of the wrong theme.
+### Persistent Vinyl Player
+- **Never unmounts**: `App.vue` mounts `HomeView` and `VinylPlayer` side by side so playback survives form transitions.
+- **Expanded vs. Mini**:
+  - *Expanded*: fixed full-screen stage; `html.player-expanded { overflow: hidden; background: var(--color-intro-bg) }` locks scrolling seamlessly with `scrollbar-gutter: stable` on `<html>`. Double-click outside the record collapses it and lifts `.home-page` from its `.veiled` blur/translate state.
+  - *Mini*: click-through root (`pointer-events: none`), only the 32px header orb and hover bar opt back in. Single-click toggles play/pause (250ms debounce); double-click on the orb or blank page space (`.self` / `HeroBanner`) re-expands. Interactive controls stop `dblclick` propagation.
+- **Pure CSS morph**: `.album-anchor` interpolates `top` / `left` / `width` / `height` using `calc()` lengths (never `auto`, never `100vw` which includes scrollbar width); spin keyframes live on the inner `.album`. Hover detection is suppressed mid-flight and re-checked via `matches(':hover')` after landing.
+- **Global selection rule**: because double-click is a global gesture, `body` sets `user-select: none`; opt reading content back in with `.selectable`.
+- **Media & Controls**: `<audio preload="metadata">` streams on demand from Cloudflare R2 (`r2.kagami.im`); supports drag scrubbing, keyboard access, Media Session API, and surfaces playback errors in the bar title.
 
-The home page uses a centered `max-width: 1200px` shell. Above 1024px the content area is a Grid with a fluid main column and a 320px sidebar; below that the sidebar stacks underneath. The banner breaks out of the shell to sit flush with the page top, spanning the full viewport width and two-thirds of its height. The image (`public/heroBanner.webp`, 1672×941 WebP) uses `cover` with a centered focus: it scales proportionally and crops the excess instead of leaving gaps or stretching, so the artwork's subject stays in frame at any viewport. A two-layer SVG wave (`BannerWaves`-style, paths generated from Bézier curves) fades the bottom into the page background; both layers use `--color-bg` so they stay derived from the five tokens, never hardcoded. The transparent `AppHeader` is fixed over the artwork so the nav stays pinned while not taking up a separate row. Content layout itself uses flow and Grid with no fixed coordinates.
+## Pending Work
 
-## State management
-
-Pinia is registered in `main.ts` and shared state lives in `src/stores/` as setup stores. `player.ts` owns the player `form` (`'expanded' | 'mini'`, persisted as `kagami-ui:player-form`, fresh visits default to expanded) with `expandPlayer()` / `collapsePlayer()`; `playlist.ts` owns the track queue — it fetches `public/playlist.json` (`{ "tracks": [{ "title", "artist?", "src", "cover?", "lrc?" }] }`), holds the current index and loop mode (`列表循环` / `单曲循环`), and persists both under `kagami-ui:playlist-state`; `theme.ts` owns `isDark` (persisted as `kagami-ui:dark`) with `toggleTheme()`, applying the `dark` class to `<html>`. Components read/write stores through `usePlayerStore()` / `usePlaylistStore()` / `useThemeStore()` rather than passing props or touching storage directly. Add future shared state (profile, posts) as additional stores in the same folder.
-
-## Vinyl player
-
-The player is a persistent control that only changes form — it never unmounts. `App.vue` renders `HomeView` and `VinylPlayer` side by side for the whole app lifetime, so audio keeps playing while the player morphs.
-
-On a fresh visit the player boots in its **expanded** form: a fixed full-screen layer whose opaque backdrop hides the home page, leaving only the record visible (the record spins only while audio is playing; playback starts on the first click — autoplay is intentionally left off). Page scrolling is locked while covered — the player store toggles `html.player-expanded` and `style.css` hides the scrollbar at root level — so no dead scrollbar floats over the stage; `scrollbar-gutter: stable` on `<html>` keeps the layout width constant so docking back causes no reflow, and the html background matches the backdrop while covered so the reserved gutter strip is seamless. Double-clicking anywhere outside the record **collapses** it: the backdrop fades and the home page underneath **surfaces** — `.home-page` carries a veil (driven by the player store) that sinks the content `opacity: 0 + translateY(16px) + blur(6px)` while covered and lifts it back in one motion, with the welcome panel and content columns rising on a slight stagger after the banner, which stays put as the water surface.
-
-The morph is a pure CSS transition on `.album-anchor`: both endpoints (viewport center ↔ the header's action row) are written with the same interpolable longhands — `top` / `left` / `width` / `height` as `calc()` values, never `auto` — so the record continuously shrinks and flies to its dock instead of jumping. The spin keyframes live on the inner `.album` so the morph's position math and the rotation never fight over the same `transform`. Dock geometry mirrors `AppHeader` via `--orb-*` custom properties: a 32px orb, 12px from the top, 96px from the right (92px and 8px top on mobile, where the header uses 12px inline padding and wraps). Docking on `left: calc(100% - …)` — the containing block is the fixed root, so `100%` tracks the real layout viewport excluding the scrollbar, which `100vw` would include.
-
-In the **mini** form the root layer is `pointer-events: none`; only the orb (and its hover bar) opt back in, so the page stays fully clickable underneath. A single click on the orb toggles playback — delayed 250ms so a pending action can be cancelled by a double-click, which re-expands. Hovering or keyboard-focusing the orb opens a control bar (play/pause, seekable progress, track title, time) anchored beside the orb; hiding is delayed and the hide itself re-checks real state (`matches(':hover')` / `matches(':focus')` on the orb and bar) so the bar survives both pointer travel and synthetic boundary events. Hover is ignored while the record is mid-morph — Chrome fires enter/leave as the flying element's bounds sweep across a stationary pointer — and after landing a `:hover` re-check opens the bar if the pointer genuinely sits on the dock. Clicks and double-clicks bubble from `pointer-events: auto` descendants through the click-through root, so the bar and the orb stop `dblclick` propagation to avoid accidentally re-triggering the collapse gesture. Double-clicking blank layout space on the home page (containers via `.self`, not content cards) or the `HeroBanner` still re-expands the player — the pre-dock gesture, now mapped to `expandPlayer()`. Because double-click remains a global gesture, `body` keeps `user-select: none` as the site-wide default; opt real reading content back in with the `.selectable` utility only where copying matters (e.g. future article bodies).
-
-The form is persisted under `kagami-ui:player-form` on every change: a refresh while docked boots straight to the mini orb with no intro replay. Playback position is not persisted — audio restarts on reload, subject to browser autoplay rules.
-
-Playback is playlist-driven: `public/playlist.json` lists the tracks and `stores/playlist.ts` owns the queue (current index + loop mode, persisted under `kagami-ui:playlist-state`). Audio files and their covers live in the **Cloudflare R2 bucket** (`r2.kagami.im`) — nothing media-related is bundled or committed; `playlist.json` holds the absolute URLs and each track's `cover` field feeds both the record face and the Media Session artwork. The `<audio>` element binds `src` to the current track with `preload="metadata"` — visitors download no audio until they press play, and each track (~1 MB/min at 128 kbps) streams on demand. `ended` advances the queue in list mode while `loop="one"` repeats natively; a single-track playlist wraps onto itself, so prev/next just restart it. The hover bar gains prev/next and a playlist toggle; the click-toggled panel renders three states (`loading` / `ready` / `failed` — a failed fetch shows a retry hint instead of an empty list) and the Media Session API exposes metadata and transport controls — play/pause, prev/next and seekto — to the OS (lock screen, media keys, headphones). Audio element errors surface as a `⚠ 播放出错` state in the bar title and clear when playback works again.
-
-Content is placeholder-only for now. Routing and the public API will be wired in when the remaining pages are implemented.
+Header navigation links, search, multi-page routing, and live backend API integration are not wired yet.
