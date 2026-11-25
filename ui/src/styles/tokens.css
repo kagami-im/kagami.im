@@ -24,6 +24,7 @@
   --color-surface: oklch(0.995 0.004 var(--hue));
   --color-surface-muted: oklch(0.93 0.02 var(--hue));
   --color-nav-surface: oklch(0.94 0.025 var(--hue));
+  --color-header-bg: oklch(0.97 0.02 var(--hue-bg) / 0.8);
   --color-hero-surface: oklch(0.88 0.045 var(--hue-bg));
   --color-welcome-surface: oklch(0.995 0.004 var(--hue));
   /* Expanded player stage: pure white in light mode — the record reads like a
@@ -98,6 +99,7 @@
   --color-surface: oklch(0.22 0.025 var(--hue));
   --color-surface-muted: oklch(0.28 0.03 var(--hue));
   --color-nav-surface: oklch(0.27 0.035 var(--hue));
+  --color-header-bg: oklch(0.16 0.02 var(--hue-bg) / 0.8);
   --color-hero-surface: oklch(0.28 0.04 var(--hue-bg));
   --color-welcome-surface: oklch(0.26 0.045 var(--hue-pink));
   /* The intro wall is the page wall: aliasing --color-bg makes the backdrop

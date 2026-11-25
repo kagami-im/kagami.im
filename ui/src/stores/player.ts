@@ -3,6 +3,14 @@ import { ref, watch } from 'vue'
 
 export type PlayerForm = 'expanded' | 'mini'
 
+export interface DockRect {
+  top: number
+  left: number
+  right: number
+  width: number
+  height: number
+}
+
 const STORAGE_KEY = 'kagami-ui:player-form'
 
 function loadPlayerForm(): PlayerForm {
@@ -14,6 +22,11 @@ export const usePlayerStore = defineStore('player', () => {
   // The player component is always mounted; `form` only decides how it is
   // presented: full-screen record (expanded) or docked header orb (mini).
   const form = ref<PlayerForm>(loadPlayerForm())
+
+  // Measured geometry of the placeholder slot inside AppHeader. Keeping this
+  // in the store lets VinylPlayer dock directly onto the slot without
+  // hardcoding AppHeader's padding or button widths.
+  const dockRect = ref<DockRect | null>(null)
 
   // While the record stage covers the viewport there is nothing behind it to
   // scroll, and a live scrollbar floating over the backdrop reads as a bug.
@@ -39,5 +52,9 @@ export const usePlayerStore = defineStore('player', () => {
     localStorage.setItem(STORAGE_KEY, form.value)
   }
 
-  return { form, expandPlayer, collapsePlayer }
+  const setDockRect = (rect: DockRect | null) => {
+    dockRect.value = rect
+  }
+
+  return { form, dockRect, expandPlayer, collapsePlayer, setDockRect }
 })

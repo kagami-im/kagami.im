@@ -43,12 +43,6 @@
   font-size: 13px;
 }
 
-.quick-entries {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
 @media (max-width: 767px) {
   .welcome-panel {
     padding: var(--space-3) var(--space-4);

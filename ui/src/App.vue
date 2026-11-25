@@ -1,15 +1,53 @@
 <script setup lang="ts">
-import HomeView from './views/HomeView.vue'
+import AppHeader from './components/AppHeader.vue'
 import VinylPlayer from './components/VinylPlayer.vue'
+import { usePlayerStore } from './stores/player'
+
+const playerStore = usePlayerStore()
+
+// Interactive controls, content cards, and selectable reading text opt out of
+// the blank-space double-click gesture that expands the vinyl player.
+const DBLCLICK_IGNORE_SELECTOR = [
+  'a',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  '[role="button"]',
+  '.selectable',
+  '.article-list',
+  '.profile-card',
+  '.daily-note',
+  '.welcome-panel',
+  '.detail-card',
+].join(', ')
+
+const handleStageDblclick = (event: MouseEvent) => {
+  if (playerStore.form !== 'mini') {
+    return
+  }
+  const target = event.target as HTMLElement | null
+  if (!target || target.closest(DBLCLICK_IGNORE_SELECTOR)) {
+    return
+  }
+  playerStore.expandPlayer()
+}
 </script>
 
 <template>
   <!--
-    Both stages are always mounted. The player covers the page in expanded
-    form and docks into the header in mini form; HomeView reveals itself as
-    the backdrop fades. No Transition wrapper: the morph is CSS-driven inside
-    VinylPlayer so the record never unmounts mid-flight.
+    AppHeader and VinylPlayer stay mounted across route transitions so audio
+    playback and header docking survive page navigation without interruption.
   -->
-  <HomeView />
+  <AppHeader />
+  <div class="app-stage" @dblclick="handleStageDblclick">
+    <RouterView />
+  </div>
   <VinylPlayer />
 </template>
+
+<style scoped>
+.app-stage {
+  min-height: 100vh;
+}
+</style>

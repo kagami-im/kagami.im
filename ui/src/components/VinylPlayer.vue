@@ -1,66 +1,66 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
+import { useAudioPlayer } from '../composables/useAudioPlayer'
+import MiniPlayerBar from './MiniPlayerBar.vue'
+import PlaylistPopover from './PlaylistPopover.vue'
 
 const playerStore = usePlayerStore()
-const { form } = storeToRefs(playerStore)
+const { form, dockRect } = storeToRefs(playerStore)
 const playlistStore = usePlaylistStore()
-const { tracks, index, loopMode, currentTrack, status } = storeToRefs(playlistStore)
+const { loopMode, currentTrack } = storeToRefs(playlistStore)
+
+const audioElRef = ref<HTMLAudioElement | null>(null)
+const anchorElRef = ref<HTMLElement | null>(null)
+const miniBarRef = ref<InstanceType<typeof MiniPlayerBar> | null>(null)
+
+const {
+  isPlaying,
+  currentTime,
+  duration,
+  scrubbing,
+  displayPercent,
+  playbackError,
+  togglePlay,
+  playTrack,
+  playPrev,
+  playNext,
+  handleEnded,
+  handleAudioError,
+  onAudioPlay,
+  onAudioPause,
+  handleTimeUpdate,
+  handleLoadedMetadata,
+  startScrub,
+  moveScrub,
+  endScrub,
+  handleProgressKeydown,
+} = useAudioPlayer(audioElRef)
 
 // The record face is the current track's cover, streamed from the R2 bucket.
 const coverSrc = computed(() => currentTrack.value?.cover ?? '')
 
-const audioElRef = ref<HTMLAudioElement | null>(null)
-const anchorElRef = ref<HTMLElement | null>(null)
-const barElRef = ref<HTMLElement | null>(null)
-const isPlaying = ref(false)
-const currentTime = ref(0)
-const duration = ref(0)
-
-const progressPercent = computed(() =>
-  duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0
-)
-
-const formatTime = (seconds: number): string => {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '0:00'
+// Bind measured coordinates from AppHeader's dock slot when available,
+// falling back to the CSS defaults before mount.
+const dockStyle = computed(() => {
+  const rect = dockRect.value
+  if (!rect) {
+    return undefined
   }
-  const minutes = Math.floor(seconds / 60)
-  const padded = String(Math.floor(seconds % 60)).padStart(2, '0')
-  return `${minutes}:${padded}`
-}
-
-// R2 fetches can fail mid-stream (offline, bucket misconfig); surface it in
-// the bar instead of failing silently. Cleared when playback works again or
-// the track changes.
-const playbackError = ref(false)
-const handleAudioError = () => {
-  playbackError.value = true
-  isPlaying.value = false
-  console.error('Audio playback error', audioElRef.value?.error)
-}
-
-const onAudioPlay = () => {
-  isPlaying.value = true
-  playbackError.value = false
-}
-
-const togglePlay = async () => {
-  const audio = audioElRef.value
-  if (!audio) {
-    return
+  return {
+    '--orb-size': `${rect.width}px`,
+    '--orb-top': `${rect.top}px`,
+    '--orb-right': `${rect.right}px`,
   }
-  if (audio.paused) {
-    try {
-      await audio.play()
-    } catch (e) {
-      console.error('Playback failed', e)
-    }
-  } else {
-    audio.pause()
-  }
+})
+
+// Track whether the last pointer interaction was touch so mobile users can tap
+// the mini orb to reveal/hide the control bar without needing hover.
+let lastPointerType = 'mouse'
+const onAlbumPointerDown = (event: PointerEvent) => {
+  lastPointerType = event.pointerType
 }
 
 // Single click and double click must coexist on the docked orb: a click starts
@@ -68,53 +68,12 @@ const togglePlay = async () => {
 const SINGLE_CLICK_DELAY = 250
 let clickTimer: number | null = null
 
-const handleAlbumClick = () => {
-  if (form.value === 'expanded') {
-    void togglePlay()
-    return
-  }
-  if (clickTimer !== null) {
-    return
-  }
-  clickTimer = window.setTimeout(() => {
-    clickTimer = null
-    void togglePlay()
-  }, SINGLE_CLICK_DELAY)
-}
-
-const handleAlbumDblclick = () => {
-  if (form.value !== 'mini') {
-    return
-  }
-  if (clickTimer !== null) {
-    window.clearTimeout(clickTimer)
-    clickTimer = null
-  }
-  playerStore.expandPlayer()
-}
-
-// Keyboard activation mirrors a pointer click on the album: play/pause in
-// both forms (the 250ms dblclick guard is pointer-specific and unneeded here).
-const handleAlbumKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    void togglePlay()
-  }
-}
-
-// The hover bar must survive moving the pointer from the orb onto itself, so
-// hiding is delayed and cancelled on re-enter. Hover tracking only exists in
-// mini form: the expanded record is the same element, and letting it arm
-// isHovered would pop the bar the instant the player docks.
 const isHovered = ref(false)
 let hoverTimer: number | null = null
 
 // While the record morphs, Chrome fires enter/leave as its bounds sweep across
 // a stationary pointer, which would flash the bar mid-flight. Swallow hover
-// until the morph settles, then re-check with :hover — a pointer parked on the
-// dock gets the bar even though no further enter event will fire for it.
-// The settle window is read from the stylesheet (the four morph properties
-// share one duration) so this guard can never drift from the CSS transition.
+// until the morph settles, then re-check with :hover.
 const isMorphing = ref(false)
 let morphTimer: number | null = null
 
@@ -148,12 +107,8 @@ const scheduleHideMiniBar = () => {
   }
   hoverTimer = window.setTimeout(() => {
     hoverTimer = null
-    // Final decision from real state, not events: layout shifts (focus ring,
-    // panel render) fire synthetic boundary events under a stationary pointer,
-    // and dragging scrubs with pointer capture, so only hide when neither the
-    // orb nor the bar is genuinely hovered, focused, or being scrubbed.
     const anchor = anchorElRef.value
-    const bar = barElRef.value
+    const bar = miniBarRef.value?.el ?? null
     const keep =
       scrubbing.value ||
       anchor?.matches(':hover') === true ||
@@ -168,129 +123,81 @@ const scheduleHideMiniBar = () => {
 
 const showMiniBarView = computed(() => form.value === 'mini' && isHovered.value)
 
-// Set when a track should start playing as soon as it is loaded (prev/next,
-// ended auto-advance, playlist click). Consumed by the track-change watcher.
-const pendingPlay = ref(false)
-
-const restartCurrent = () => {
-  const audio = audioElRef.value
-  if (!audio) {
+const handleAlbumClick = () => {
+  if (form.value === 'expanded') {
+    void togglePlay()
     return
   }
-  audio.currentTime = 0
-  void audio.play().catch((e) => console.error('Playback failed', e))
-}
-
-const playTrack = (i: number) => {
-  if (i === index.value) {
-    restartCurrent()
-    return
-  }
-  pendingPlay.value = true
-  playlistStore.setIndex(i)
-}
-
-const playPrev = () => {
-  // A single-track playlist wraps onto itself: prev/next just restart it.
-  if (tracks.value.length <= 1) {
-    restartCurrent()
-    return
-  }
-  pendingPlay.value = true
-  playlistStore.prev()
-}
-
-const playNext = () => {
-  if (tracks.value.length <= 1) {
-    restartCurrent()
-    return
-  }
-  pendingPlay.value = true
-  playlistStore.next()
-}
-
-const handleEnded = () => {
-  // loop="one" repeats natively, so ended only fires in list mode: advance
-  // (a single-track playlist wraps onto itself and restarts).
-  if (tracks.value.length <= 1) {
-    restartCurrent()
-    return
-  }
-  pendingPlay.value = true
-  playlistStore.next()
-}
-
-const updateMediaSession = (track: { title: string; artist?: string; cover: string }) => {
-  if (!('mediaSession' in navigator)) {
-    return
-  }
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title: track.title,
-    artist: track.artist ?? 'Kagami',
-    album: 'Kagami',
-    artwork: [{ src: track.cover, sizes: '1024x1024', type: 'image/webp' }],
-  })
-}
-
-// Metadata must be set for the boot track too (prev is undefined then), while
-// the src reload below only makes sense when the track actually changed.
-watch(currentTrack, (track) => {
-  if (track) {
-    updateMediaSession(track)
-  }
-})
-
-watch(currentTrack, async (track, prev) => {
-  if (!track || !prev) {
-    return
-  }
-  const audio = audioElRef.value
-  if (!audio) {
-    return
-  }
-  const shouldPlay = pendingPlay.value || isPlaying.value
-  pendingPlay.value = false
-  isPlaying.value = false
-  currentTime.value = 0
-  duration.value = 0
-  await nextTick() // let the src attribute land before touching the element
-  if (shouldPlay) {
-    try {
-      await audio.play()
-    } catch (e) {
-      console.error('Playback failed', e)
+  if (lastPointerType === 'touch') {
+    isHovered.value = !isHovered.value
+    if (!isHovered.value) {
+      showPlaylist.value = false
     }
+    return
   }
-})
+  if (clickTimer !== null) {
+    return
+  }
+  clickTimer = window.setTimeout(() => {
+    clickTimer = null
+    void togglePlay()
+  }, SINGLE_CLICK_DELAY)
+}
 
-watch(
-  isPlaying,
-  (playing) => {
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
-    }
-  },
-  { immediate: true }
-)
+const handleAlbumDblclick = () => {
+  if (form.value !== 'mini') {
+    return
+  }
+  if (clickTimer !== null) {
+    window.clearTimeout(clickTimer)
+    clickTimer = null
+  }
+  playerStore.expandPlayer()
+}
 
-// Playlist panel: click-toggled, closed by any click outside it or the toggle.
+const handleAlbumKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    void togglePlay()
+  }
+}
+
+// Playlist panel & touch-opened mini bar: closed by any click outside.
 const showPlaylist = ref(false)
 const togglePlaylist = () => {
   showPlaylist.value = !showPlaylist.value
 }
+
 const onDocClick = (event: MouseEvent) => {
   const target = event.target as HTMLElement | null
-  if (!target?.closest('.playlist-panel') && !target?.closest('.bar-list')) {
+  if (!target) {
+    return
+  }
+  if (showPlaylist.value && !target.closest('.playlist-panel') && !target.closest('.bar-list')) {
+    showPlaylist.value = false
+  }
+  if (
+    lastPointerType === 'touch' &&
+    isHovered.value &&
+    !target.closest('.album-anchor') &&
+    !target.closest('.mini-bar') &&
+    !target.closest('.playlist-panel')
+  ) {
+    isHovered.value = false
     showPlaylist.value = false
   }
 }
-watch(showPlaylist, (visible) => {
-  if (visible) {
-    document.addEventListener('click', onDocClick)
-  } else {
-    document.removeEventListener('click', onDocClick)
+
+watch(
+  () => showPlaylist.value || (lastPointerType === 'touch' && isHovered.value),
+  (listen) => {
+    if (listen) {
+      document.addEventListener('click', onDocClick)
+    } else {
+      document.removeEventListener('click', onDocClick)
+    }
   }
-})
+)
 
 watch(form, (value) => {
   if (morphTimer !== null) {
@@ -333,128 +240,18 @@ onBeforeUnmount(() => {
   }
   document.removeEventListener('click', onDocClick)
 })
-
-const handleTimeUpdate = () => {
-  if (audioElRef.value) {
-    currentTime.value = audioElRef.value.currentTime
-  }
-}
-
-const handleLoadedMetadata = () => {
-  if (audioElRef.value) {
-    duration.value = audioElRef.value.duration
-  }
-}
-
-const progressElRef = ref<HTMLElement | null>(null)
-
-// Scrubbing: pointer-down previews the target position (the audio keeps
-// playing), pointer-up commits a single seek. Commit-on-release avoids
-// firing a Range request at R2 for every pointer move while dragging.
-const scrubbing = ref(false)
-const scrubPercent = ref(0)
-
-const displayPercent = computed(() =>
-  scrubbing.value ? scrubPercent.value : progressPercent.value
-)
-
-const ratioFromClientX = (clientX: number): number | null => {
-  const track = progressElRef.value
-  if (!track || !Number.isFinite(duration.value) || duration.value <= 0) {
-    return null
-  }
-  const rect = track.getBoundingClientRect()
-  return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-}
-
-const onProgressPointerDown = (event: PointerEvent) => {
-  if (!Number.isFinite(duration.value) || duration.value <= 0) {
-    return
-  }
-  const el = event.currentTarget as HTMLElement
-  el.setPointerCapture(event.pointerId)
-  scrubbing.value = true
-  const ratio = ratioFromClientX(event.clientX)
-  if (ratio !== null) {
-    scrubPercent.value = ratio * 100
-  }
-}
-
-const onProgressPointerMove = (event: PointerEvent) => {
-  if (!scrubbing.value) {
-    return
-  }
-  const ratio = ratioFromClientX(event.clientX)
-  if (ratio !== null) {
-    scrubPercent.value = ratio * 100
-  }
-}
-
-const onProgressPointerUp = (event: PointerEvent) => {
-  if (!scrubbing.value) {
-    return
-  }
-  scrubbing.value = false
-  const ratio = ratioFromClientX(event.clientX)
-  const audio = audioElRef.value
-  if (ratio === null || !audio) {
-    return
-  }
-  audio.currentTime = ratio * duration.value
-  currentTime.value = audio.currentTime
-}
-
-// Arrow keys nudge ±5s; Home/End jump to the ends.
-const onProgressKeydown = (event: KeyboardEvent) => {
-  const audio = audioElRef.value
-  if (!audio || !Number.isFinite(duration.value) || duration.value <= 0) {
-    return
-  }
-  if (event.key === 'ArrowRight') {
-    audio.currentTime = Math.min(duration.value, audio.currentTime + 5)
-    event.preventDefault()
-  } else if (event.key === 'ArrowLeft') {
-    audio.currentTime = Math.max(0, audio.currentTime - 5)
-    event.preventDefault()
-  } else if (event.key === 'Home') {
-    audio.currentTime = 0
-    event.preventDefault()
-  } else if (event.key === 'End') {
-    audio.currentTime = duration.value
-    event.preventDefault()
-  }
-}
-
-onMounted(() => {
-  // Expose transport controls to the OS (lock screen, media keys, headphones).
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', () => {
-      void togglePlay()
-    })
-    navigator.mediaSession.setActionHandler('pause', () => {
-      void togglePlay()
-    })
-    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev())
-    navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      const audio = audioElRef.value
-      if (audio && details.seekTime != null) {
-        audio.currentTime = details.seekTime
-      }
-    })
-  }
-})
 </script>
 
 <template>
   <!--
     The player never unmounts; it only morphs. In expanded form it covers the
     viewport as an intro stage, in mini form the root is click-through and only
-    the docked orb (plus hover bar) is interactive.
+    the docked orb (plus control bar / playlist) is interactive.
   -->
   <div
     class="vinyl-player"
     :class="form === 'expanded' ? 'is-expanded' : 'is-mini'"
+    :style="dockStyle"
     @dblclick="playerStore.collapsePlayer()"
   >
     <div class="backdrop" aria-hidden="true"></div>
@@ -474,6 +271,7 @@ onMounted(() => {
       <div
         class="album"
         :class="{ playing: isPlaying }"
+        @pointerdown="onAlbumPointerDown"
         @click.stop="handleAlbumClick"
         @dblclick.stop="handleAlbumDblclick"
       >
@@ -482,97 +280,35 @@ onMounted(() => {
     </div>
 
     <Transition name="bar">
-      <div
+      <MiniPlayerBar
         v-if="showMiniBarView"
-        ref="barElRef"
-        class="mini-bar"
+        ref="miniBarRef"
+        :is-playing="isPlaying"
+        :playback-error="playbackError"
+        :track-title="currentTrack?.title ?? ''"
+        :current-time="currentTime"
+        :duration="duration"
+        :display-percent="displayPercent"
         @mouseenter="showMiniBar"
         @mouseleave="scheduleHideMiniBar"
         @focusout="scheduleHideMiniBar"
-        @dblclick.stop
-      >
-        <button type="button" class="bar-button bar-skip" aria-label="上一首" @click="playPrev">
-          ❮❮
-        </button>
-        <button
-          type="button"
-          class="bar-button"
-          :aria-label="isPlaying ? '暂停' : '播放'"
-          @click="togglePlay"
-        >
-          {{ isPlaying ? '❚❚' : '▶' }}
-        </button>
-        <button type="button" class="bar-button bar-skip" aria-label="下一首" @click="playNext">
-          ❯❯
-        </button>
-        <span
-          class="bar-title"
-          :class="{ error: playbackError }"
-          :title="playbackError ? '音频加载或播放失败，请稍后重试' : (currentTrack?.title ?? '')"
-        >
-          {{ playbackError ? '⚠ 播放出错' : (currentTrack?.title ?? '…') }}
-        </span>
-        <div
-          ref="progressElRef"
-          class="bar-progress"
-          role="slider"
-          tabindex="0"
-          aria-label="播放进度"
-          :aria-valuemin="0"
-          :aria-valuemax="Math.max(Math.round(duration), 0)"
-          :aria-valuenow="Math.round(currentTime)"
-          :aria-valuetext="`${formatTime(currentTime)} / ${formatTime(duration)}`"
-          @pointerdown="onProgressPointerDown"
-          @pointermove="onProgressPointerMove"
-          @pointerup="onProgressPointerUp"
-          @keydown="onProgressKeydown"
-        >
-          <div class="bar-track">
-            <div class="bar-fill" :style="{ width: `${displayPercent}%` }"></div>
-          </div>
-        </div>
-        <span class="bar-time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
-        <button type="button" class="bar-button bar-list" aria-label="播放列表" @click="togglePlaylist">
-          ☰
-        </button>
-      </div>
+        @prev="playPrev"
+        @toggle-play="togglePlay"
+        @next="playNext"
+        @toggle-playlist="togglePlaylist"
+        @scrub-start="startScrub"
+        @scrub-move="moveScrub"
+        @scrub-end="endScrub"
+        @progress-keydown="handleProgressKeydown"
+      />
     </Transition>
 
     <Transition name="bar">
-      <div v-if="showPlaylist && form === 'mini'" class="playlist-panel" @dblclick.stop>
-        <div class="panel-head">
-          <span class="panel-title">
-            播放列表<template v-if="status === 'ready'"> · {{ tracks.length }}</template>
-          </span>
-          <button
-            v-if="status === 'ready'"
-            type="button"
-            class="panel-loop"
-            :title="loopMode === 'all' ? '切换为单曲循环' : '切换为列表循环'"
-            @click="playlistStore.toggleLoop()"
-          >
-            {{ loopMode === 'all' ? '列表循环' : '单曲循环' }}
-          </button>
-        </div>
-        <ol v-if="status === 'ready'" class="panel-list">
-          <li
-            v-for="(track, i) in tracks"
-            :key="track.src"
-            :class="{ active: i === index }"
-            tabindex="0"
-            @click="playTrack(i)"
-            @keydown.enter.prevent="playTrack(i)"
-            @keydown.space.prevent="playTrack(i)"
-          >
-            <span class="track-mark">{{ i === index ? (isPlaying ? '❚❚' : '▶') : i + 1 }}</span>
-            <span class="track-name" :title="track.title">{{ track.title }}</span>
-            <span v-if="track.artist" class="track-artist">{{ track.artist }}</span>
-          </li>
-        </ol>
-        <p v-else class="panel-status">
-          {{ status === 'loading' ? '歌单加载中…' : '歌单加载失败 · 请刷新重试' }}
-        </p>
-      </div>
+      <PlaylistPopover
+        v-if="showPlaylist && form === 'mini'"
+        :is-playing="isPlaying"
+        @select="playTrack"
+      />
     </Transition>
 
     <audio
@@ -582,7 +318,7 @@ onMounted(() => {
       :loop="loopMode === 'one'"
       preload="metadata"
       @play="onAudioPlay"
-      @pause="isPlaying = false"
+      @pause="onAudioPause"
       @timeupdate="handleTimeUpdate"
       @loadedmetadata="handleLoadedMetadata"
       @ended="handleEnded"
@@ -592,9 +328,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Docking geometry must mirror AppHeader: padding-inline 16px, 32px icon
-   buttons, 8px gaps. From the right edge: theme [16..48], search [56..88],
-   orb [96..128]; buttons are centered in the 56px header row. */
+/* Fallback docking geometry before AppHeader reports its measured dock slot. */
 .vinyl-player {
   --album-size: clamp(220px, 39vw, 420px);
   --orb-size: 32px;
@@ -605,7 +339,7 @@ onMounted(() => {
   position: fixed;
   inset: 0;
   z-index: 40;
-  /* In mini form the whole root is click-through; only the orb and bar opt back in. */
+  /* In mini form the whole root is click-through; only the orb and popovers opt back in. */
   pointer-events: none;
 }
 
@@ -646,8 +380,6 @@ onMounted(() => {
     height 0.7s var(--morph-ease);
 }
 
-/* Keyboard reachability: the themed focus ring tracks the circular orb and
-   reads on both the pale intro wall and the dark page. */
 .album-anchor:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 4px;
@@ -691,14 +423,10 @@ onMounted(() => {
   box-shadow: var(--shadow-cover-hover);
 }
 
-/* The docked orb is a control, not a scene object: it sits flat in the header
-   row beside the search/theme buttons, so the wall halo is dropped entirely
-   (it fades out during the flight as box-shadow interpolates to none). */
 .is-mini .album-cover {
   box-shadow: none;
 }
 
-/* The docked orb is too small for 1.06 to read; give hover a visible pop. */
 .is-mini .album:hover .album-cover {
   transform: scale(1.2);
   box-shadow: none;
@@ -711,212 +439,6 @@ onMounted(() => {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* Hover control bar, anchored to the left of the orb at the same height. */
-.mini-bar {
-  position: absolute;
-  top: calc(var(--orb-top) + var(--orb-size) / 2 - 20px);
-  right: calc(var(--orb-right) + var(--orb-size) + var(--space-2));
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 40px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-soft);
-  pointer-events: auto;
-}
-
-.bar-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.bar-button:focus-visible,
-.panel-loop:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 1px;
-}
-
-.bar-button:hover {
-  background: var(--color-surface-muted);
-}
-
-.bar-title {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-  font-size: 13px;
-}
-
-.bar-title.error {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.bar-progress {
-  display: flex;
-  align-items: center;
-  width: 110px;
-  height: 14px;
-  cursor: pointer;
-}
-
-.bar-progress:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.bar-track {
-  width: 100%;
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-primary);
-}
-
-.bar-time {
-  color: var(--color-text-muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.bar-skip {
-  font-size: 8px;
-  letter-spacing: -1px;
-  color: var(--color-text-muted);
-}
-
-.bar-list {
-  font-size: 12px;
-}
-
-/* Playlist panel, below the hover bar; click-toggled, click-outside closes. */
-.playlist-panel {
-  position: absolute;
-  top: calc(var(--orb-top) + var(--orb-size) + 10px);
-  right: calc(var(--orb-right) + var(--orb-size) + var(--space-2));
-  width: 280px;
-  max-height: 280px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.panel-title {
-  color: var(--color-text);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.panel-loop {
-  padding: 2px 8px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-nav-surface);
-  color: var(--color-text-muted);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.panel-loop:hover {
-  color: var(--color-text);
-}
-
-.panel-list {
-  margin: 0;
-  padding: var(--space-1);
-  list-style: none;
-  overflow-y: auto;
-}
-
-.panel-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.panel-list li:hover {
-  background: var(--color-surface-muted);
-}
-
-.panel-list li:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: -2px;
-}
-
-.panel-status {
-  padding: var(--space-3);
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.panel-list li.active {
-  background: var(--color-surface-muted);
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.track-mark {
-  width: 18px;
-  flex-shrink: 0;
-  font-size: 10px;
-  text-align: center;
-}
-
-.track-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.track-artist {
-  flex-shrink: 0;
-  color: var(--color-text-faint);
-  font-size: 11px;
 }
 
 .bar-enter-active,
@@ -933,24 +455,21 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  /* The header wraps to two rows here: the actions sit higher (8px padding
-     instead of the 56px-row centering) with 12px inline padding, and the bar
-     can't fit beside the orb. */
   .vinyl-player {
     --orb-top: 8px;
     --orb-right: 92px;
   }
+}
 
-  .mini-bar {
-    right: auto;
-    left: var(--space-3);
-    top: calc(var(--orb-top) + var(--orb-size) + var(--space-2));
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .album-anchor,
+  .album-cover {
+    transition-duration: 0.01ms;
   }
 
-  .playlist-panel {
-    right: auto;
-    left: var(--space-3);
-    width: calc(100vw - var(--space-6));
+  .album {
+    animation: none;
   }
 }
 </style>

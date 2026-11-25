@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { usePlayerStore } from '../stores/player'
-
-const playerStore = usePlayerStore()
 
 interface WaveOptions {
   amplitude: number
@@ -44,7 +41,7 @@ const waveFront = computed(() => buildWavePath({ ...shared, amplitude: 10, basel
 </script>
 
 <template>
-  <section class="hero-banner" aria-label="首页横幅" @dblclick="playerStore.expandPlayer()">
+  <section class="hero-banner" aria-label="首页横幅">
     <svg
       class="banner-waves"
       viewBox="0 0 1200 60"
@@ -58,14 +55,13 @@ const waveFront = computed(() => buildWavePath({ ...shared, amplitude: 10, basel
 </template>
 
 <style scoped>
-/* Scale the artwork to cover the full viewport width and two-thirds of its
-   height, cropping the excess rather than leaving gaps or stretching it. */
+/* Full-bleed banner: sits directly inside .home-page outside .home-shell so
+   width: 100% spans the viewport cleanly without 100vw scrollbar overflow. */
 .hero-banner {
   position: relative;
   isolation: isolate;
-  width: 100vw;
+  width: 100%;
   height: 66.667vh;
-  margin-inline: calc(50% - 50vw);
   overflow: hidden;
   background: var(--color-hero-surface) url('/heroBanner.webp') center / cover no-repeat;
 }

@@ -32,28 +32,31 @@ export const usePlaylistStore = defineStore('playlist', () => {
     // Corrupt state falls back to the defaults.
   }
 
-  fetch('/playlist.json')
-    .then((resp) => {
+  const loadPlaylist = async () => {
+    status.value = 'loading'
+    try {
+      const resp = await fetch('/playlist.json')
       if (!resp.ok) {
         throw new Error(`playlist.json responded ${resp.status}`)
       }
-      return resp.json()
-    })
-    .then((data: { tracks?: Track[] }) => {
+      const data = (await resp.json()) as { tracks?: Track[] }
       tracks.value = data.tracks ?? []
       if (index.value >= tracks.value.length) index.value = 0
       status.value = 'ready'
-    })
-    .catch((e) => {
+    } catch (e) {
       console.error('Playlist load failed', e)
       status.value = 'failed'
-    })
+    }
+  }
+
+  void loadPlaylist()
 
   const setIndex = (i: number) => {
     index.value = Math.min(Math.max(i, 0), Math.max(tracks.value.length - 1, 0))
   }
   const next = () => setIndex((index.value + 1) % Math.max(tracks.value.length, 1))
-  const prev = () => setIndex((index.value - 1 + Math.max(tracks.value.length, 1)) % Math.max(tracks.value.length, 1))
+  const prev = () =>
+    setIndex((index.value - 1 + Math.max(tracks.value.length, 1)) % Math.max(tracks.value.length, 1))
   const toggleLoop = () => {
     loopMode.value = loopMode.value === 'all' ? 'one' : 'all'
   }
@@ -63,5 +66,16 @@ export const usePlaylistStore = defineStore('playlist', () => {
     localStorage.setItem(STATE_KEY, JSON.stringify({ index: i, loopMode: mode }))
   })
 
-  return { tracks, index, loopMode, status, currentTrack, setIndex, next, prev, toggleLoop }
+  return {
+    tracks,
+    index,
+    loopMode,
+    status,
+    currentTrack,
+    loadPlaylist,
+    setIndex,
+    next,
+    prev,
+    toggleLoop,
+  }
 })

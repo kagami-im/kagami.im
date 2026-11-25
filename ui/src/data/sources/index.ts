@@ -6,13 +6,21 @@ function newestFirst(a: Article, b: Article): number {
   return b.publishedAt.localeCompare(a.publishedAt)
 }
 
-/** Local markdown files are the only article source for now. */
-export function getArticles(): Article[] {
+/**
+ * Swappable article data-source facade.
+ * Exposed as async Promises so switching to the backend `/api/posts` later
+ * requires replacing only this module, without changing store or view contracts.
+ */
+export async function getArticles(): Promise<Article[]> {
   return listLocalArticles().sort(newestFirst)
 }
 
-export function getArticleBody(article: Article): ArticleBody | null {
-  return getLocalArticleBody(article.slug)
+export async function getArticleBySlug(slug: string): Promise<Article | null> {
+  return listLocalArticles().find((article) => article.slug === slug) ?? null
+}
+
+export async function getArticleBody(slug: string): Promise<ArticleBody | null> {
+  return getLocalArticleBody(slug)
 }
 
 export type { Article, ArticleBody } from '../types'
