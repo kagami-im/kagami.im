@@ -10,14 +10,14 @@ Shipped:
 2. **Content model** — `posts` / `tags` / `post_tags`, public read API, author management API (drafts, explicit publish, edit, delete), pagination envelope
 3. **Post extras** — pinned posts, word count, and reading time computed on write
 4. **Comments** — two-level threads (public read, signed-in write, author hide/unhide/delete) + Testcontainers/MockMvc integration suite (9 tests)
-5. **Public frontend (`ui/`)** — OKLCH light/dark theme, 1200px responsive home shell, local Markdown article list & detail reader (`src/content/posts` behind `src/data/sources`), and an always-mounted morphing vinyl player streaming an 8-track playlist from Cloudflare R2
+5. **Public frontend (`ui/`)** — afternoon light & dusk dark OKLCH design system, offline CJK/Latin typography, listening-desk home layout with inline track queue and numbered article index (`src/content/posts` behind `src/data/sources`), reading-progress Markdown detail view, and an always-mounted morphing vinyl player streaming from Cloudflare R2 (with optional local offline override)
 
-Next up: PostgreSQL full-text search, views/likes, frontend routing/nav/search, and wiring `ui/` to the live backend API.
+Next up: PostgreSQL full-text search, views/likes, archives/tags/search pages, comments UI, and wiring `ui/` to the live backend API.
 
 ## Tech Stack
 
 - **Backend (`src/`)**: Java 25, Spring Boot 4.1.0 (Web MVC, Validation, Security, Flyway), Nimbus JOSE JWT 10.9.1 (RS256), Bucket4j 8.21.0 + Caffeine, MyBatis-Plus 3.5.17, PostgreSQL 18, Lombok, JUnit 5 + Testcontainers 1.21.4 + MockMvc
-- **Public frontend (`ui/`)**: Vue 3, TypeScript 6, Vite 8, Pinia 4, `markdown-it` (no component library, no router yet), single-hue OKLCH design tokens
+- **Public frontend (`ui/`)**: Vue 3, TypeScript 6, Vite 8, Vue Router, Pinia 4, `markdown-it` (zero component libraries), OKLCH design tokens
 - **Infrastructure**: Docker Compose (`postgres:18.4`), Cloudflare R2 (`r2.kagami.im`) for player media
 
 ## Project Layout

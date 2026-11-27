@@ -1,314 +1,173 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
-import { useAudioPlayer } from '../composables/useAudioPlayer'
-import MiniPlayerBar from './MiniPlayerBar.vue'
-import PlaylistPopover from './PlaylistPopover.vue'
+import { useAudioStore } from '../stores/audio'
 
 const playerStore = usePlayerStore()
-const { form, dockRect } = storeToRefs(playerStore)
+const { form, stageDockRect } = storeToRefs(playerStore)
 const playlistStore = usePlaylistStore()
 const { loopMode, currentTrack } = storeToRefs(playlistStore)
+const audioStore = useAudioStore()
+const { isPlaying } = storeToRefs(audioStore)
 
 const audioElRef = ref<HTMLAudioElement | null>(null)
-const anchorElRef = ref<HTMLElement | null>(null)
-const miniBarRef = ref<InstanceType<typeof MiniPlayerBar> | null>(null)
 
-const {
-  isPlaying,
-  currentTime,
-  duration,
-  scrubbing,
-  displayPercent,
-  playbackError,
-  togglePlay,
-  playTrack,
-  playPrev,
-  playNext,
-  handleEnded,
-  handleAudioError,
-  onAudioPlay,
-  onAudioPause,
-  handleTimeUpdate,
-  handleLoadedMetadata,
-  startScrub,
-  moveScrub,
-  endScrub,
-  handleProgressKeydown,
-} = useAudioPlayer(audioElRef)
+watch(audioElRef, (el) => {
+  audioStore.bindAudioElement(el)
+})
 
-// The record face is the current track's cover, streamed from the R2 bucket.
 const coverSrc = computed(() => currentTrack.value?.cover ?? '')
+const isStageVisible = computed(() => form.value === 'mini' && stageDockRect.value !== null)
+const isVinylVisible = computed(() => form.value === 'expanded' || isStageVisible.value)
 
-// Bind measured coordinates from AppHeader's dock slot when available,
-// falling back to the CSS defaults before mount.
-const dockStyle = computed(() => {
-  const rect = dockRect.value
+const playerStyle = computed(() => {
+  const rect = stageDockRect.value
   if (!rect) {
     return undefined
   }
   return {
-    '--orb-size': `${rect.width}px`,
-    '--orb-top': `${rect.top}px`,
-    '--orb-right': `${rect.right}px`,
+    '--dock-top': `${rect.top}px`,
+    '--dock-left': `${rect.left}px`,
+    '--dock-size': `${rect.width}px`,
   }
 })
 
-// Track whether the last pointer interaction was touch so mobile users can tap
-// the mini orb to reveal/hide the control bar without needing hover.
-let lastPointerType = 'mouse'
-const onAlbumPointerDown = (event: PointerEvent) => {
-  lastPointerType = event.pointerType
-}
-
-// Single click and double click must coexist on the docked orb: a click starts
-// a short timer, and a dblclick cancels it before the action fires.
-const SINGLE_CLICK_DELAY = 250
-let clickTimer: number | null = null
-
-const isHovered = ref(false)
-let hoverTimer: number | null = null
-
-// While the record morphs, Chrome fires enter/leave as its bounds sweep across
-// a stationary pointer, which would flash the bar mid-flight. Swallow hover
-// until the morph settles, then re-check with :hover.
+// Enable CSS morph transitions only when switching between the home desk slot
+// and the full-screen immersive stage, so scrolling tracks the slot with zero lag.
 const isMorphing = ref(false)
 let morphTimer: number | null = null
 
-const morphSettleMs = (): number => {
-  const anchor = anchorElRef.value
-  if (!anchor) {
-    return 800
+const stopMorph = () => {
+  if (morphTimer !== null) {
+    window.clearTimeout(morphTimer)
+    morphTimer = null
   }
-  const durations = getComputedStyle(anchor).transitionDuration.split(',')
-  const seconds = Math.max(...durations.map((d) => parseFloat(d)))
-  return (Number.isFinite(seconds) ? seconds : 0.7) * 1000 + 100
+  isMorphing.value = false
 }
 
-const showMiniBar = () => {
-  if (form.value !== 'mini' || isMorphing.value) {
-    return
+const handleWindowScroll = () => {
+  if (form.value === 'mini' && isMorphing.value) {
+    stopMorph()
   }
-  if (hoverTimer !== null) {
-    window.clearTimeout(hoverTimer)
-    hoverTimer = null
-  }
-  isHovered.value = true
 }
 
-const scheduleHideMiniBar = () => {
-  if (form.value !== 'mini') {
-    return
-  }
-  if (hoverTimer !== null) {
-    window.clearTimeout(hoverTimer)
-  }
-  hoverTimer = window.setTimeout(() => {
-    hoverTimer = null
-    const anchor = anchorElRef.value
-    const bar = miniBarRef.value?.el ?? null
-    const keep =
-      scrubbing.value ||
-      anchor?.matches(':hover') === true ||
-      bar?.matches(':hover') === true ||
-      anchor?.contains(document.activeElement) === true ||
-      bar?.contains(document.activeElement) === true
-    if (!keep) {
-      isHovered.value = false
-    }
-  }, 200)
-}
-
-const showMiniBarView = computed(() => form.value === 'mini' && isHovered.value)
+watch(form, () => {
+  stopMorph()
+  isMorphing.value = true
+  morphTimer = window.setTimeout(() => {
+    morphTimer = null
+    isMorphing.value = false
+  }, 680)
+})
 
 const handleAlbumClick = () => {
-  if (form.value === 'expanded') {
-    void togglePlay()
-    return
-  }
-  if (lastPointerType === 'touch') {
-    isHovered.value = !isHovered.value
-    if (!isHovered.value) {
-      showPlaylist.value = false
-    }
-    return
-  }
-  if (clickTimer !== null) {
-    return
-  }
-  clickTimer = window.setTimeout(() => {
-    clickTimer = null
-    void togglePlay()
-  }, SINGLE_CLICK_DELAY)
+  void audioStore.togglePlay()
 }
 
 const handleAlbumDblclick = () => {
-  if (form.value !== 'mini') {
-    return
+  if (form.value === 'mini') {
+    playerStore.expandPlayer()
   }
-  if (clickTimer !== null) {
-    window.clearTimeout(clickTimer)
-    clickTimer = null
-  }
-  playerStore.expandPlayer()
 }
 
 const handleAlbumKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
-    void togglePlay()
+    void audioStore.togglePlay()
   }
 }
 
-// Playlist panel & touch-opened mini bar: closed by any click outside.
-const showPlaylist = ref(false)
-const togglePlaylist = () => {
-  showPlaylist.value = !showPlaylist.value
-}
-
-const onDocClick = (event: MouseEvent) => {
-  const target = event.target as HTMLElement | null
-  if (!target) {
-    return
-  }
-  if (showPlaylist.value && !target.closest('.playlist-panel') && !target.closest('.bar-list')) {
-    showPlaylist.value = false
-  }
-  if (
-    lastPointerType === 'touch' &&
-    isHovered.value &&
-    !target.closest('.album-anchor') &&
-    !target.closest('.mini-bar') &&
-    !target.closest('.playlist-panel')
-  ) {
-    isHovered.value = false
-    showPlaylist.value = false
-  }
-}
-
-watch(
-  () => showPlaylist.value || (lastPointerType === 'touch' && isHovered.value),
-  (listen) => {
-    if (listen) {
-      document.addEventListener('click', onDocClick)
-    } else {
-      document.removeEventListener('click', onDocClick)
-    }
-  }
-)
-
-watch(form, (value) => {
-  if (morphTimer !== null) {
-    window.clearTimeout(morphTimer)
-    morphTimer = null
-  }
-  if (clickTimer !== null) {
-    window.clearTimeout(clickTimer)
-    clickTimer = null
-  }
-  if (hoverTimer !== null) {
-    window.clearTimeout(hoverTimer)
-    hoverTimer = null
-  }
-  isHovered.value = false
-  showPlaylist.value = false
-  if (value === 'mini') {
-    isMorphing.value = true
-    morphTimer = window.setTimeout(() => {
-      morphTimer = null
-      isMorphing.value = false
-      if (anchorElRef.value?.matches(':hover')) {
-        isHovered.value = true
-      }
-    }, morphSettleMs())
-  } else {
-    isMorphing.value = false
-  }
+onMounted(() => {
+  audioStore.registerMediaSessionHandlers()
+  window.addEventListener('scroll', handleWindowScroll, { passive: true })
 })
 
 onBeforeUnmount(() => {
-  if (clickTimer !== null) {
-    window.clearTimeout(clickTimer)
-  }
-  if (hoverTimer !== null) {
-    window.clearTimeout(hoverTimer)
-  }
-  if (morphTimer !== null) {
-    window.clearTimeout(morphTimer)
-  }
-  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('scroll', handleWindowScroll)
+  audioStore.unregisterMediaSessionHandlers()
+  audioStore.bindAudioElement(null)
+  stopMorph()
 })
 </script>
 
 <template>
   <!--
-    The player never unmounts; it only morphs. In expanded form it covers the
-    viewport as an intro stage, in mini form the root is click-through and only
-    the docked orb (plus control bar / playlist) is interactive.
+    Always mounted so audio playback survives route transitions.
+    Visually renders in two states only: docked on the home listening desk,
+    or expanded into the full-screen immersive vinyl stage.
   -->
   <div
     class="vinyl-player"
-    :class="form === 'expanded' ? 'is-expanded' : 'is-mini'"
-    :style="dockStyle"
+    :class="{
+      'is-expanded': form === 'expanded',
+      'is-stage': isStageVisible,
+      'is-hidden': !isVinylVisible,
+      'is-morphing': isMorphing,
+    }"
+    :style="playerStyle"
     @dblclick="playerStore.collapsePlayer()"
   >
     <div class="backdrop" aria-hidden="true"></div>
 
     <div
-      ref="anchorElRef"
+      v-show="isVinylVisible"
       class="album-anchor"
       role="button"
       tabindex="0"
       :aria-label="isPlaying ? '暂停播放' : '播放音乐'"
       @keydown="handleAlbumKeydown"
-      @focusin="showMiniBar"
-      @focusout="scheduleHideMiniBar"
-      @mouseenter="showMiniBar"
-      @mouseleave="scheduleHideMiniBar"
     >
       <div
-        class="album"
-        :class="{ playing: isPlaying }"
-        @pointerdown="onAlbumPointerDown"
+        class="album-scale"
         @click.stop="handleAlbumClick"
         @dblclick.stop="handleAlbumDblclick"
       >
-        <img :src="coverSrc" class="album-cover" draggable="false" alt="cover" />
+        <div class="album" :class="{ playing: isPlaying }">
+          <img v-if="coverSrc" :src="coverSrc" class="album-cover" draggable="false" alt="cover" />
+          <div v-else class="album-placeholder" aria-hidden="true"></div>
+          <span class="album-spindle" aria-hidden="true"></span>
+        </div>
       </div>
     </div>
 
-    <Transition name="bar">
-      <MiniPlayerBar
-        v-if="showMiniBarView"
-        ref="miniBarRef"
-        :is-playing="isPlaying"
-        :playback-error="playbackError"
-        :track-title="currentTrack?.title ?? ''"
-        :current-time="currentTime"
-        :duration="duration"
-        :display-percent="displayPercent"
-        @mouseenter="showMiniBar"
-        @mouseleave="scheduleHideMiniBar"
-        @focusout="scheduleHideMiniBar"
-        @prev="playPrev"
-        @toggle-play="togglePlay"
-        @next="playNext"
-        @toggle-playlist="togglePlaylist"
-        @scrub-start="startScrub"
-        @scrub-move="moveScrub"
-        @scrub-end="endScrub"
-        @progress-keydown="handleProgressKeydown"
-      />
-    </Transition>
+    <Transition name="caption-fade">
+      <div v-if="form === 'expanded' && currentTrack" class="expanded-caption" @dblclick.stop>
+        <Transition name="caption-fade" mode="out-in">
+          <div :key="currentTrack.src" class="caption-inner">
+            <p class="caption-title">{{ currentTrack.title }}</p>
+            <p v-if="currentTrack.artist" class="caption-artist">{{ currentTrack.artist }}</p>
+          </div>
+        </Transition>
 
-    <Transition name="bar">
-      <PlaylistPopover
-        v-if="showPlaylist && form === 'mini'"
-        :is-playing="isPlaying"
-        @select="playTrack"
-      />
+        <div class="caption-controls">
+          <button type="button" class="stage-ctrl" aria-label="上一首" @click="audioStore.playPrev()">
+            <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+              <path d="M5 4.5h1.6v11H5v-11Zm2.6 5.5 7.4-5v10l-7.4-5Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="stage-ctrl is-primary"
+            :aria-label="isPlaying ? '暂停' : '播放'"
+            @click="audioStore.togglePlay()"
+          >
+            <svg v-if="isPlaying" viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+              <rect x="5.5" y="4.5" width="3.2" height="11" rx="1" />
+              <rect x="11.3" y="4.5" width="3.2" height="11" rx="1" />
+            </svg>
+            <svg v-else viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+              <path d="M6.4 4.3 15.6 10l-9.2 5.7V4.3Z" />
+            </svg>
+          </button>
+          <button type="button" class="stage-ctrl" aria-label="下一首" @click="audioStore.playNext()">
+            <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+              <path d="M13.4 4.5H15v11h-1.6v-11ZM5 5l7.4 5-7.4 5V5Z" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </Transition>
 
     <audio
@@ -317,87 +176,105 @@ onBeforeUnmount(() => {
       :src="currentTrack.src"
       :loop="loopMode === 'one'"
       preload="metadata"
-      @play="onAudioPlay"
-      @pause="onAudioPause"
-      @timeupdate="handleTimeUpdate"
-      @loadedmetadata="handleLoadedMetadata"
-      @ended="handleEnded"
-      @error="handleAudioError"
+      @play="audioStore.onAudioPlay()"
+      @pause="audioStore.onAudioPause()"
+      @timeupdate="audioStore.handleTimeUpdate()"
+      @loadedmetadata="audioStore.handleLoadedMetadata()"
+      @ended="audioStore.handleEnded()"
+      @error="audioStore.handleAudioError()"
     ></audio>
   </div>
 </template>
 
 <style scoped>
-/* Fallback docking geometry before AppHeader reports its measured dock slot. */
 .vinyl-player {
-  --album-size: clamp(220px, 39vw, 420px);
-  --orb-size: 32px;
-  --orb-top: 12px;
-  --orb-right: 96px;
-  --morph-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --album-size: clamp(220px, 34vw, 360px);
+  --dock-size: 232px;
+  --dock-top: 140px;
+  --dock-left: calc(50% - var(--dock-size) / 2);
 
   position: fixed;
   inset: 0;
-  z-index: 40;
-  /* In mini form the whole root is click-through; only the orb and popovers opt back in. */
+  /* Sit beneath the fixed AppHeader (z-index: 20) while docked on the home desk
+     so the record scrolls cleanly underneath the frosted header; rise above it
+     when expanded into the full-screen immersive stage. */
+  z-index: 15;
   pointer-events: none;
 }
 
 .vinyl-player.is-expanded {
+  z-index: 40;
   pointer-events: auto;
 }
 
 .backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-intro-bg);
-  opacity: 1;
-  transition: opacity 0.6s ease;
-}
-
-.is-mini .backdrop {
+  background-color: var(--color-intro-bg);
+  background-image: var(--bg-ambient);
   opacity: 0;
+  transition: opacity var(--duration-slow) ease;
 }
 
-/*
-  The record morphs between two endpoints written with the same longhands
-  (top / left / width / height) so every property interpolates continuously.
-  left is a calc() in both states — an `auto` endpoint would jump instead of
-  animate. Centering uses top/left math, not translate(), so the spin keyframes
-  keep sole ownership of the album's transform.
-*/
+.is-expanded .backdrop {
+  opacity: 1;
+}
+
 .album-anchor {
   position: absolute;
-  top: calc(50% - var(--album-size) / 2);
+  top: var(--dock-top);
+  left: var(--dock-left);
+  width: var(--dock-size);
+  height: var(--dock-size);
+  pointer-events: auto;
+}
+
+.is-morphing .album-anchor {
+  transition:
+    top var(--duration-slow) var(--ease-out),
+    left var(--duration-slow) var(--ease-out),
+    width var(--duration-slow) var(--ease-out),
+    height var(--duration-slow) var(--ease-out);
+}
+
+.is-expanded .album-anchor {
+  top: calc(44% - var(--album-size) / 2);
   left: calc(50% - var(--album-size) / 2);
   width: var(--album-size);
   height: var(--album-size);
-  pointer-events: auto;
-  transition:
-    top 0.7s var(--morph-ease),
-    left 0.7s var(--morph-ease),
-    width 0.7s var(--morph-ease),
-    height 0.7s var(--morph-ease);
 }
 
 .album-anchor:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 4px;
+  border-radius: 50%;
 }
 
-.is-mini .album-anchor {
-  top: var(--orb-top);
-  left: calc(100% - var(--orb-right) - var(--orb-size));
-  width: var(--orb-size);
-  height: var(--orb-size);
-}
-
-.album {
+/* Scale the entire disc (cover, rim sheen, spindle, shadow) together on hover
+   so the cover never overflows its circular border. */
+.album-scale {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   cursor: pointer;
-  animation: spin 20s linear infinite;
+  box-shadow: var(--shadow-cover);
+  transition:
+    transform 0.35s var(--ease-out),
+    box-shadow 0.35s ease;
+}
+
+.album-scale:hover {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-cover-hover);
+}
+
+.album {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  animation: spin 24s linear infinite;
   animation-play-state: paused;
   will-change: transform;
 }
@@ -406,30 +283,144 @@ onBeforeUnmount(() => {
   animation-play-state: running;
 }
 
-.album-cover {
+/* Soft diffuse sheen & delicate inner rim so the cover blends organically into the platter */
+.album::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 32% 24%,
+    var(--color-vinyl-sheen) 0%,
+    transparent 52%
+  );
+  box-shadow:
+    inset 0 0 0 1px var(--color-cover-edge),
+    inset 0 0 14px var(--color-vinyl-rim);
+  pointer-events: none;
+  transition: box-shadow var(--duration-base) ease;
+}
+
+.album-cover,
+.album-placeholder {
+  display: block;
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--color-cover-edge);
-  box-shadow: var(--shadow-cover);
+  background: var(--color-surface-muted);
+  transition: background-color var(--duration-base) ease;
+}
+
+/* Subtle translucent glass-hub spindle instead of a stark opaque cutout */
+.album-spindle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7.5%;
+  height: 7.5%;
+  min-width: 14px;
+  min-height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--color-spindle-ring);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--color-cover-edge);
+  box-shadow: 0 0 8px var(--color-vinyl-rim);
+  pointer-events: none;
   transition:
-    transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1),
-    box-shadow 0.35s ease;
+    background-color var(--duration-base) ease,
+    border-color var(--duration-base) ease;
 }
 
-.album:hover .album-cover {
-  transform: scale(1.06);
-  box-shadow: var(--shadow-cover-hover);
+.album-spindle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36%;
+  height: 36%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--color-spindle-core);
 }
 
-.is-mini .album-cover {
-  box-shadow: none;
+/* Expanded immersive stage caption & transport */
+.expanded-caption {
+  position: absolute;
+  left: 50%;
+  top: calc(44% + var(--album-size) / 2 + var(--space-8));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+  max-width: min(86vw, 480px);
+  pointer-events: auto;
 }
 
-.is-mini .album:hover .album-cover {
-  transform: scale(1.2);
-  box-shadow: none;
+.caption-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+}
+
+.caption-artist {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.caption-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stage-ctrl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface-glass);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.stage-ctrl:hover {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.stage-ctrl.is-primary {
+  width: 40px;
+  height: 40px;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-accent);
+}
+
+.stage-ctrl.is-primary:hover {
+  opacity: 0.92;
+  transform: scale(1.04);
+}
+
+.stage-ctrl:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 @keyframes spin {
@@ -441,30 +432,23 @@ onBeforeUnmount(() => {
   }
 }
 
-.bar-enter-active,
-.bar-leave-active {
+.caption-fade-enter-active,
+.caption-fade-leave-active {
   transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+    opacity var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
 }
 
-.bar-enter-from,
-.bar-leave-to {
+.caption-fade-enter-from,
+.caption-fade-leave-to {
   opacity: 0;
-  transform: translateX(6px);
-}
-
-@media (max-width: 767px) {
-  .vinyl-player {
-    --orb-top: 8px;
-    --orb-right: 92px;
-  }
+  transform: translateY(6px);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop,
-  .album-anchor,
-  .album-cover {
+  .is-morphing .album-anchor,
+  .album-scale {
     transition-duration: 0.01ms;
   }
 

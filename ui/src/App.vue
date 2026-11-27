@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppHeader from './components/AppHeader.vue'
 import VinylPlayer from './components/VinylPlayer.vue'
 import { usePlayerStore } from './stores/player'
 
+const route = useRoute()
 const playerStore = usePlayerStore()
 
-// Interactive controls, content cards, and selectable reading text opt out of
-// the blank-space double-click gesture that expands the vinyl player.
+// Interactive controls, content surfaces, and selectable reading text opt out
+// of the blank-space double-click gesture that opens the immersive vinyl stage.
 const DBLCLICK_IGNORE_SELECTOR = [
   'a',
   'button',
@@ -15,15 +18,15 @@ const DBLCLICK_IGNORE_SELECTOR = [
   'select',
   '[role="button"]',
   '.selectable',
-  '.article-list',
-  '.profile-card',
-  '.daily-note',
-  '.welcome-panel',
-  '.detail-card',
+  '.listening-desk',
+  '.article-index',
+  '.desk-corner',
+  '.detail-article',
 ].join(', ')
 
+// Only allow double-clicking into the full-screen vinyl stage on the home page.
 const handleStageDblclick = (event: MouseEvent) => {
-  if (playerStore.form !== 'mini') {
+  if (route.name !== 'home' || playerStore.form !== 'mini') {
     return
   }
   const target = event.target as HTMLElement | null
@@ -32,12 +35,22 @@ const handleStageDblclick = (event: MouseEvent) => {
   }
   playerStore.expandPlayer()
 }
+
+// Collapse the immersive stage if navigation leaves the home page.
+watch(
+  () => route.name,
+  (name) => {
+    if (name !== 'home' && playerStore.form === 'expanded') {
+      playerStore.collapsePlayer()
+    }
+  }
+)
 </script>
 
 <template>
   <!--
     AppHeader and VinylPlayer stay mounted across route transitions so audio
-    playback and header docking survive page navigation without interruption.
+    playback and slot docking survive navigation without interruption.
   -->
   <AppHeader />
   <div class="app-stage" @dblclick="handleStageDblclick">

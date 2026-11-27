@@ -9,86 +9,129 @@ const { isDark } = storeToRefs(themeStore)
 </script>
 
 <template>
-  <section class="profile-card">
-    <div class="profile-head">
-      <span class="profile-avatar" aria-hidden="true">
-        <img :src="isDark ? avatarDark : avatarLight" alt="" draggable="false" />
-      </span>
-      <div class="profile-identity">
-        <h2 class="profile-name">Kagami</h2>
-        <p class="profile-bio">......</p>
+  <section class="desk-corner" aria-label="资料面板" @dblclick.stop>
+    <div class="corner-identity">
+      <div class="avatar-frame" aria-hidden="true">
+        <img
+          :src="avatarLight"
+          alt=""
+          class="avatar-img"
+          :class="{ 'is-visible': !isDark }"
+          draggable="false"
+        />
+        <img
+          :src="avatarDark"
+          alt=""
+          class="avatar-img"
+          :class="{ 'is-visible': isDark }"
+          draggable="false"
+        />
+      </div>
+
+      <div class="identity-copy">
+        <h2 class="identity-name">Kagami</h2>
       </div>
     </div>
 
-    <div class="profile-links">
-      <span class="profile-link"><a href="mailto:admin@kagami.im">Email</a> </span>
+    <div class="corner-links">
+      <a href="mailto:admin@kagami.im" class="contact-link">
+        admin@kagami.im
+      </a>
     </div>
   </section>
 </template>
 
 <style scoped>
-.profile-card {
+.desk-corner {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(12px);
+  transition:
+    background-color var(--duration-base) ease,
+    border-color var(--duration-base) ease;
 }
 
-.profile-head {
+.corner-identity {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
-.profile-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
+.avatar-frame {
+  position: relative;
+  width: 52px;
+  height: 52px;
   flex-shrink: 0;
   border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
   background: var(--color-avatar);
   overflow: hidden;
+  transition:
+    background-color var(--duration-base) ease,
+    border-color var(--duration-base) ease;
 }
 
-.profile-avatar img {
+.avatar-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-out);
 }
 
-.profile-identity {
+.avatar-img.is-visible {
+  opacity: 1;
+}
+
+.identity-copy {
   min-width: 0;
 }
 
-.profile-name {
+.identity-name {
+  font-family: var(--font-serif);
   font-size: 17px;
   font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--color-text);
+  transition: color var(--duration-base) ease;
 }
 
-.profile-bio {
-  margin-top: var(--space-1);
-  color: var(--color-text-muted);
+.identity-mode {
+  margin-top: 2px;
+  color: var(--color-text-faint);
   font-size: 12px;
-  line-height: 1.5;
+  letter-spacing: 0.04em;
+  transition: color var(--duration-base) ease;
 }
 
-.profile-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+.corner-links {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  transition: border-color var(--duration-base) ease;
 }
 
-.profile-link {
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-nav-surface);
+.contact-link {
+  display: inline-block;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  transition: color var(--duration-fast) ease;
+}
+
+.contact-link:hover {
+  color: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-img {
+    transition: none;
+  }
 }
 </style>

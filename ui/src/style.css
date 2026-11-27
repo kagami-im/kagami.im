@@ -8,15 +8,43 @@ html {
   -webkit-text-size-adjust: 100%;
   /* Reserve the scrollbar gutter even while the expanded player hides the
      scrollbar, so the layout width never changes and docking back causes no
-     reflow of the revealed home page. */
+     reflow of the revealed page. */
   scrollbar-gutter: stable;
+  background-color: var(--color-bg);
+  transition: background-color var(--duration-base) ease;
 }
 
-/* Double-clicking blank space is a global gesture for switching views. Browsers
-   resolve a double-click on a textless area to the nearest selectable text node,
-   which randomly highlights unrelated text. Make "not selectable" the site-wide
-   default so every new surface is safe, and opt real reading content back in via
-   `.selectable` (or `user-select: text`) only where copying is meaningful. */
+/* Unified, restrained scrollbars for both viewport and inner scroll containers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-scrollbar-hover);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* Double-clicking blank space is a global gesture for switching to the
+   immersive player stage. Keep selection opt-in so stray double-clicks never
+   highlight random labels, and apply `.selectable` to reading surfaces. */
 .selectable {
   user-select: text;
 }
@@ -25,22 +53,21 @@ body {
   margin: 0;
   min-height: 100vh;
   user-select: none;
-  background: var(--color-bg);
+  background-color: var(--color-bg);
+  background-image: var(--bg-ambient);
+  background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.75;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color var(--duration-base) ease,
+    color var(--duration-base) ease;
 }
 
-/* The expanded player is a full-viewport stage: nothing behind it can scroll,
-   and a live scrollbar floating over the backdrop reads as a bug. Root-level
-   overflow owns the viewport directly (no body-propagation quirks); docking
-   restores scrolling. (Toggled by the player store; see player.ts.)
-   With scrollbar-gutter reserving the gutter, the fixed backdrop cannot paint
-   that strip — the canvas underneath shows through — so the html background
-   matches the backdrop while covered, keeping the stage seamless edge to edge. */
+/* Lock root scrolling only while the immersive full-screen vinyl stage is open. */
 html.player-expanded {
   overflow: hidden;
   background: var(--color-intro-bg);
@@ -49,6 +76,7 @@ html.player-expanded {
 h1,
 h2,
 h3,
+h4,
 p {
   margin: 0;
 }
@@ -60,12 +88,19 @@ a {
 
 button {
   font: inherit;
+  color: inherit;
 }
 
-ul {
+ul,
+ol {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.tabular-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -73,5 +108,10 @@ ul {
   *::before,
   *::after {
     scroll-behavior: auto !important;
+  }
+
+  html,
+  body {
+    transition: none;
   }
 }

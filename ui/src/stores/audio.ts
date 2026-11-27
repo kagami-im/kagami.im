@@ -1,6 +1,6 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
-import { storeToRefs } from 'pinia'
-import { usePlaylistStore } from '../stores/playlist'
+import { defineStore, storeToRefs } from 'pinia'
+import { computed, nextTick, ref, watch } from 'vue'
+import { usePlaylistStore } from './playlist'
 
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) {
@@ -11,26 +11,17 @@ export function formatTime(seconds: number): string {
   return `${minutes}:${padded}`
 }
 
-export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
+export const useAudioStore = defineStore('audio', () => {
   const playlistStore = usePlaylistStore()
   const { tracks, index, currentTrack } = storeToRefs(playlistStore)
 
+  const audioEl = ref<HTMLAudioElement | null>(null)
   const isPlaying = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
-
-  // R2 fetches can fail mid-stream (offline, bucket misconfig); surface it in
-  // the bar instead of failing silently. Cleared when playback works again or
-  // the track changes.
   const playbackError = ref(false)
-
-  // Set when a track should start playing as soon as it is loaded (prev/next,
-  // ended auto-advance, playlist click). Consumed by the track-change watcher.
   const pendingPlay = ref(false)
 
-  // Scrubbing: pointer-down previews the target position (the audio keeps
-  // playing), pointer-up commits a single seek. Commit-on-release avoids
-  // firing a Range request at R2 for every pointer move while dragging.
   const scrubbing = ref(false)
   const scrubPercent = ref(0)
 
@@ -42,10 +33,14 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     scrubbing.value ? scrubPercent.value : progressPercent.value
   )
 
+  const bindAudioElement = (el: HTMLAudioElement | null) => {
+    audioEl.value = el
+  }
+
   const handleAudioError = () => {
     playbackError.value = true
     isPlaying.value = false
-    console.error('Audio playback error', audioElRef.value?.error)
+    console.error('Audio playback error', audioEl.value?.error)
   }
 
   const onAudioPlay = () => {
@@ -58,7 +53,7 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
   }
 
   const togglePlay = async () => {
-    const audio = audioElRef.value
+    const audio = audioEl.value
     if (!audio) {
       return
     }
@@ -74,7 +69,7 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
   }
 
   const restartCurrent = () => {
-    const audio = audioElRef.value
+    const audio = audioEl.value
     if (!audio) {
       return
     }
@@ -84,7 +79,11 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
 
   const playTrack = (i: number) => {
     if (i === index.value) {
-      restartCurrent()
+      if (isPlaying.value) {
+        audioEl.value?.pause()
+      } else {
+        void togglePlay()
+      }
       return
     }
     pendingPlay.value = true
@@ -92,7 +91,6 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
   }
 
   const playPrev = () => {
-    // A single-track playlist wraps onto itself: prev/next just restart it.
     if (tracks.value.length <= 1) {
       restartCurrent()
       return
@@ -111,8 +109,6 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
   }
 
   const handleEnded = () => {
-    // loop="one" repeats natively, so ended only fires in list mode: advance
-    // (a single-track playlist wraps onto itself and restarts).
     if (tracks.value.length <= 1) {
       restartCurrent()
       return
@@ -122,14 +118,14 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
   }
 
   const handleTimeUpdate = () => {
-    if (audioElRef.value) {
-      currentTime.value = audioElRef.value.currentTime
+    if (audioEl.value) {
+      currentTime.value = audioEl.value.currentTime
     }
   }
 
   const handleLoadedMetadata = () => {
-    if (audioElRef.value) {
-      duration.value = audioElRef.value.duration
+    if (audioEl.value) {
+      duration.value = audioEl.value.duration
     }
   }
 
@@ -170,7 +166,7 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     }
     scrubbing.value = false
     const ratio = ratioFromEvent(event, track)
-    const audio = audioElRef.value
+    const audio = audioEl.value
     if (ratio === null || !audio) {
       return
     }
@@ -178,9 +174,8 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     currentTime.value = audio.currentTime
   }
 
-  // Arrow keys nudge ±5s; Home/End jump to the ends.
   const handleProgressKeydown = (event: KeyboardEvent) => {
-    const audio = audioElRef.value
+    const audio = audioEl.value
     if (!audio || !Number.isFinite(duration.value) || duration.value <= 0) {
       return
     }
@@ -211,6 +206,37 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     })
   }
 
+  const registerMediaSessionHandlers = () => {
+    if (!('mediaSession' in navigator)) {
+      return
+    }
+    navigator.mediaSession.setActionHandler('play', () => {
+      void togglePlay()
+    })
+    navigator.mediaSession.setActionHandler('pause', () => {
+      void togglePlay()
+    })
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev())
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      const audio = audioEl.value
+      if (audio && details.seekTime != null) {
+        audio.currentTime = details.seekTime
+      }
+    })
+  }
+
+  const unregisterMediaSessionHandlers = () => {
+    if (!('mediaSession' in navigator)) {
+      return
+    }
+    navigator.mediaSession.setActionHandler('play', null)
+    navigator.mediaSession.setActionHandler('pause', null)
+    navigator.mediaSession.setActionHandler('previoustrack', null)
+    navigator.mediaSession.setActionHandler('nexttrack', null)
+    navigator.mediaSession.setActionHandler('seekto', null)
+  }
+
   watch(currentTrack, async (track, prev) => {
     if (!track) {
       return
@@ -218,11 +244,10 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     updateMediaSession(track)
     playbackError.value = false
 
-    // Only reload/autoplay when switching from a previous track.
     if (!prev) {
       return
     }
-    const audio = audioElRef.value
+    const audio = audioEl.value
     if (!audio) {
       return
     }
@@ -231,7 +256,7 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     isPlaying.value = false
     currentTime.value = 0
     duration.value = 0
-    await nextTick() // let the src attribute land before touching the element
+    await nextTick()
     if (shouldPlay) {
       try {
         await audio.play()
@@ -251,36 +276,6 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     { immediate: true }
   )
 
-  onMounted(() => {
-    // Expose transport controls to the OS (lock screen, media keys, headphones).
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => {
-        void togglePlay()
-      })
-      navigator.mediaSession.setActionHandler('pause', () => {
-        void togglePlay()
-      })
-      navigator.mediaSession.setActionHandler('previoustrack', () => playPrev())
-      navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
-      navigator.mediaSession.setActionHandler('seekto', (details) => {
-        const audio = audioElRef.value
-        if (audio && details.seekTime != null) {
-          audio.currentTime = details.seekTime
-        }
-      })
-    }
-  })
-
-  onBeforeUnmount(() => {
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', null)
-      navigator.mediaSession.setActionHandler('pause', null)
-      navigator.mediaSession.setActionHandler('previoustrack', null)
-      navigator.mediaSession.setActionHandler('nexttrack', null)
-      navigator.mediaSession.setActionHandler('seekto', null)
-    }
-  })
-
   return {
     isPlaying,
     currentTime,
@@ -288,6 +283,7 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     scrubbing,
     displayPercent,
     playbackError,
+    bindAudioElement,
     togglePlay,
     playTrack,
     playPrev,
@@ -302,5 +298,7 @@ export function useAudioPlayer(audioElRef: Ref<HTMLAudioElement | null>) {
     moveScrub,
     endScrub,
     handleProgressKeydown,
+    registerMediaSessionHandlers,
+    unregisterMediaSessionHandlers,
   }
-}
+})

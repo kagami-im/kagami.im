@@ -7,11 +7,16 @@ const { articles, listStatus } = storeToRefs(store)
 </script>
 
 <template>
-  <section class="article-list">
-    <div class="section-heading">
-      <h2 class="section-title">最新文章</h2>
-      <span v-if="listStatus === 'ready'" class="section-meta">{{ articles.length }} 篇</span>
-    </div>
+  <section class="article-index" aria-label="文章目录" @dblclick.stop>
+    <header class="section-heading">
+      <div class="heading-group">
+        <h2 class="section-title">杂记</h2>
+        <span class="section-sub">Notes &amp; Essays</span>
+      </div>
+      <span v-if="listStatus === 'ready'" class="section-meta tabular-nums">
+        {{ String(articles.length).padStart(2, '0') }} 篇
+      </span>
+    </header>
 
     <p v-if="listStatus === 'loading'" class="list-status">文章加载中…</p>
 
@@ -21,19 +26,32 @@ const { articles, listStatus } = storeToRefs(store)
     </div>
 
     <p v-else-if="listStatus === 'ready' && articles.length === 0" class="list-status">
-      暂无文章。
+      什么都没有留下
     </p>
 
-    <ul v-else class="article-rows">
-      <li v-for="article in articles" :key="article.slug" class="article-item">
+    <ol v-else class="article-rows">
+      <li v-for="(article, i) in articles" :key="article.slug" class="article-item">
         <RouterLink
           :to="{ name: 'article-detail', params: { slug: article.slug } }"
           class="article-row"
           :aria-label="`阅读：${article.title}`"
         >
-          <div class="article-thumb" aria-hidden="true">
+          <span class="article-num tabular-nums">{{ String(i + 1).padStart(2, '0') }}</span>
+
+          <div class="article-body">
+            <div class="article-head">
+              <h3 class="article-title">{{ article.title }}</h3>
+              <span class="article-date tabular-nums">{{ article.publishedAt.slice(0, 10) }}</span>
+            </div>
+            <p v-if="article.summary" class="article-summary">{{ article.summary }}</p>
+            <div v-if="article.tags.length || article.pinned" class="article-meta">
+              <span v-if="article.pinned" class="meta-pin">置顶</span>
+              <span v-for="tag in article.tags" :key="tag" class="meta-tag"># {{ tag }}</span>
+            </div>
+          </div>
+
+          <div v-if="article.coverUrl" class="article-thumb" aria-hidden="true">
             <img
-              v-if="article.coverUrl"
               :src="article.coverUrl"
               alt=""
               class="article-thumb-img"
@@ -41,27 +59,15 @@ const { articles, listStatus } = storeToRefs(store)
               draggable="false"
             />
           </div>
-          <div class="article-body">
-            <div class="article-title">{{ article.title }}</div>
-            <p class="article-summary">{{ article.summary }}</p>
-            <div class="article-meta">
-              <span>{{ article.publishedAt.slice(0, 10) }}</span>
-              <span v-if="article.tags.length" class="article-tags">{{ article.tags.join(' · ') }}</span>
-            </div>
-          </div>
         </RouterLink>
       </li>
-    </ul>
+    </ol>
   </section>
 </template>
 
 <style scoped>
-.article-list {
+.article-index {
   min-width: 0;
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
 }
 
 .section-heading {
@@ -69,12 +75,31 @@ const { articles, listStatus } = storeToRefs(store)
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-strong);
+  transition: border-color var(--duration-base) ease;
+}
+
+.heading-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .section-title {
-  font-size: 17px;
+  font-family: var(--font-serif);
+  font-size: 18px;
   font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text);
+  letter-spacing: 0.04em;
+}
+
+.section-sub {
+  color: var(--color-text-faint);
+  font-size: 12px;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
 }
 
 .section-meta {
@@ -85,48 +110,49 @@ const { articles, listStatus } = storeToRefs(store)
 .list-status {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding-block: var(--space-4);
-  color: var(--color-text-muted);
-  font-size: 13px;
+  gap: var(--space-3);
+  padding: var(--space-8) 0;
+  color: var(--color-text-faint);
+  font-size: 13.5px;
 }
 
 .retry-button {
-  padding: 2px var(--space-3);
-  border: 0;
+  padding: 3px var(--space-3);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
-  background: var(--color-nav-surface);
-  color: var(--color-text);
+  background: transparent;
+  color: var(--color-text-muted);
   font-size: 12px;
   cursor: pointer;
+}
+
+.retry-button:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
 }
 
 .article-rows {
   display: flex;
   flex-direction: column;
-  padding: 0;
-  margin: 0;
-  list-style: none;
 }
 
 .article-item {
   border-bottom: 1px solid var(--color-border);
-}
-
-.article-item:last-child {
-  border-bottom: 0;
+  transition: border-color var(--duration-base) ease;
 }
 
 .article-row {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-block: var(--space-2);
-  border-radius: var(--radius-sm);
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-2);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) ease;
 }
 
-.article-item:last-child .article-row {
-  padding-bottom: 0;
+.article-row:hover {
+  transform: translateX(3px);
 }
 
 .article-row:hover .article-title {
@@ -136,14 +162,89 @@ const { articles, listStatus } = storeToRefs(store)
 .article-row:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.article-num {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  color: var(--color-text-faint);
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.article-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.article-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 24px;
+}
+
+.article-title {
+  font-family: var(--font-serif);
+  font-size: 16.5px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--color-text);
+  transition: color var(--duration-fast) ease;
+}
+
+.article-date {
+  flex-shrink: 0;
+  color: var(--color-text-faint);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.article-summary {
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.article-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.meta-pin {
+  padding: 1px 7px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent-warm-soft);
+  color: var(--color-accent-warm);
+  font-size: 11px;
+}
+
+.meta-tag {
+  color: var(--color-text-faint);
+  font-size: 11.5px;
 }
 
 .article-thumb {
-  width: 80px;
+  width: 84px;
   aspect-ratio: 4 / 3;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: var(--color-nav-surface);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
   overflow: hidden;
 }
 
@@ -154,47 +255,25 @@ const { articles, listStatus } = storeToRefs(store)
   display: block;
 }
 
-.article-body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.article-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.article-summary {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.article-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  color: var(--color-text-faint);
-  font-size: 11px;
-}
-
-.article-tags {
-  color: var(--color-text-muted);
-}
-
 @media (max-width: 767px) {
-  .article-list {
-    padding: var(--space-4);
+  .article-row {
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+  }
+
+  .article-head {
+    flex-direction: column;
+    gap: 2px;
   }
 
   .article-thumb {
     width: 68px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-row:hover {
+    transform: none;
   }
 }
 </style>
