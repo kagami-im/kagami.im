@@ -34,10 +34,6 @@ let rafId: number | null = null
 let resizeObserver: ResizeObserver | null = null
 
 const measureStageSlot = () => {
-  // Never overwrite the resting desk coordinates while veiled in expanded mode.
-  if (form.value === 'expanded') {
-    return
-  }
   const slot = stageSlotRef.value
   if (!slot) {
     return
@@ -551,12 +547,15 @@ onBeforeUnmount(() => {
 .desk-playlist {
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-3);
+  /* Reserve the steady-state queue height so async playlist loading never
+     causes a layout jump on page refresh. */
+  min-height: 229px;
 }
 
 .track-list {
   display: flex;
   flex-direction: column;
-  max-height: 216px;
+  height: 216px;
   overflow-y: auto;
   padding-right: var(--space-1);
 }

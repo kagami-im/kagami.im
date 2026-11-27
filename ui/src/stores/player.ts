@@ -11,11 +11,24 @@ export interface DockRect {
   height: number
 }
 
+const STORAGE_KEY = 'kagami-ui:player-form'
+
+function loadInitialForm(): PlayerForm {
+  // Never cover inner routes (e.g. direct article links or refreshes) with the
+  // home-only immersive stage.
+  if (window.location.pathname !== '/') {
+    return 'mini'
+  }
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved === 'mini' || saved === 'expanded') {
+    return saved
+  }
+  // First visit to the root path starts in the immersive vinyl stage.
+  return 'expanded'
+}
+
 export const usePlayerStore = defineStore('player', () => {
-  // Two visual states:
-  // - 'mini': docked onto the home listening-desk platter slot (hidden on inner routes while audio keeps playing)
-  // - 'expanded': full-screen immersive vinyl stage
-  const form = ref<PlayerForm>('mini')
+  const form = ref<PlayerForm>(loadInitialForm())
 
   // Measured geometry of the platter slot inside HomeView's listening desk.
   const stageDockRect = ref<DockRect | null>(null)
@@ -30,10 +43,14 @@ export const usePlayerStore = defineStore('player', () => {
 
   const expandPlayer = () => {
     form.value = 'expanded'
+    localStorage.setItem(STORAGE_KEY, 'expanded')
   }
 
-  const collapsePlayer = () => {
+  const collapsePlayer = (persist = true) => {
     form.value = 'mini'
+    if (persist) {
+      localStorage.setItem(STORAGE_KEY, 'mini')
+    }
   }
 
   const setStageDockRect = (rect: DockRect | null) => {

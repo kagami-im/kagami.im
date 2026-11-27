@@ -36,12 +36,13 @@ const handleStageDblclick = (event: MouseEvent) => {
   playerStore.expandPlayer()
 }
 
-// Collapse the immersive stage if navigation leaves the home page.
+// Collapse the immersive stage if navigation leaves the home page without
+// overwriting the user's saved home preference.
 watch(
   () => route.name,
   (name) => {
     if (name !== 'home' && playerStore.form === 'expanded') {
-      playerStore.collapsePlayer()
+      playerStore.collapsePlayer(false)
     }
   }
 )

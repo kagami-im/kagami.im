@@ -71,7 +71,7 @@ public/
 - **Pinia setup stores (`src/stores/`)**:
   - `articles.ts` — async `loadArticles()` / `loadArticleBySlug(slug)` with `listStatus` (`'idle' | 'loading' | 'ready' | 'error'`) and `detailStatus` (`'idle' | 'loading' | 'ready' | 'not-found' | 'error'`).
   - `audio.ts` — single `<audio>` playback controller bound by `VinylPlayer` and shared with `HomeView`.
-  - `player.ts` — `form` (`'mini'` default, `'expanded'` on demand) and `stageDockRect` measured from `HomeView`.
+  - `player.ts` — `form` (`'expanded'` on first visit to `/`, persisted as `kagami-ui:player-form`, always `'mini'` on inner routes) and `stageDockRect` measured from `HomeView`.
   - `playlist.ts` — fetches `/playlist.json` via `loadPlaylist()` (retryable), supports optional `VITE_MEDIA_BASE_URL` override for offline development, tracks `status`, `index`, and `loopMode` (`'all' | 'one'`), persisted as `kagami-ui:playlist-state`.
   - `theme.ts` — `isDark` (`kagami-ui:dark`).
 - **Swappable async article source**: components only talk to `useArticlesStore()`, which reads async Promise functions from `src/data/sources/index.ts`. Wiring `/api/posts` later only replaces the source implementation.
